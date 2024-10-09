@@ -50,6 +50,9 @@ def get_today():
 class policy_network(nn.Module):
 
     def __init__(self, state_dim):
+
+        super().__init__()
+
         self.fc1 = nn.Linear(state_dim, 128)
         self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, 8)
@@ -64,6 +67,9 @@ class policy_network(nn.Module):
 class value_network(nn.Module):
 
     def __init__(self, state_dim):
+
+        super().__init__()
+        
         self.fc1 = nn.Linear(state_dim, 128)
         self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, 1)

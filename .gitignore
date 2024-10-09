@@ -1,2 +1,5 @@
 mujoco/
-env1/
+venv/
+
+anaconda.sh
+

@@ -67,14 +67,6 @@ class ANTENV():
 
         dist = calc.distance(global_position, target_position)
 
-"""
-        for i in range(2):
-             dist += (global_position[i] - target_position[i])**2
-             
-             if i==1: #problem can be occured
-                dist = dist**(1/2)
-"""
-
         if self.is_healthy() == 0:
             done_mask = 1
             success = 0
@@ -93,12 +85,6 @@ class ANTENV():
 
         return done_mask, success
 
-"""
-output form
-
-done_mask: integer
-success: integer, nothing change!!
-"""
 
 
 
@@ -143,11 +129,37 @@ success: integer, nothing change!!
         if self.is_healthy():
             reward += 1
 
-        if done_mask && not success:
+        if done_mask and not success:
             reward = 0
 
         return current_state, action, self.state, reward, done_mask, success
         #five returns -> current state, action, next state, reward, done_mask
+
+
+
+    def reset(self):
+
+        mujoco.mj_resetData(self.model, self.data)
+
+        self.data.ctrl[:] = 0
+        mujoco.mj_step(self.model, self.data)
+
+        self.action_num = 0
+        self.state = []
+
+
+    def is_healthy(self):
+        #qpos z value check
+        z_pos = self.data.qpos[2]
+        if z_pos < 0.5 and z_pos > 0.8: #unhealthy case
+            return 0
+        else:
+            return 1
+
+
+    def return_self_action_num(self):
+        return self.action_num
+
 
 """
 output form
@@ -168,18 +180,6 @@ variables that can be used inside: next_state, reward (should be calculated), do
 !! -> state update is executed in Qnet code, so if want to return state, there should be state self-variable
 """
 
-
-
-    def reset(self):
-
-        mujoco.mj_resetData(self.model, self.data)
-
-        self.data.ctrl[:] = 0
-        mujoco.mj_step(self.model, self.data)
-
-        self.action_num = 0
-        self.state = []
-
 """
 output form
 
@@ -188,15 +188,3 @@ zero value action
 return observation, reward, done
 """
 
-
-    def is_healthy(self):
-        #qpos z value check
-        z_pos = self.data.qpos[2]
-        if z_pos < 0.5 && z_pos > 0.8: #unhealthy case
-            return 0
-        else:
-            return 1
-
-
-    def return_self_action_num(self):
-        return self.action_num
