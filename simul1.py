@@ -1,4 +1,0 @@
-#for simulation
-import numpy
-
-

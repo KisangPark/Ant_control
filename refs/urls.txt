@@ -1,0 +1,16 @@
+mujoco tutorial
+
+https://colab.research.google.com/github/google-deepmind/mujoco/blob/main/python/tutorial.ipynb#scrollTo=pvh47r97huS4
+
+gymnasium multi ant
+https://robotics.farama.org/envs/MaMuJoCo/ma_ant/
+
+ant
+https://gymnasium.farama.org/environments/mujoco/ant/#observation-space
+
+mujoco assets -> ants
+https://github.com/openai/gym/blob/master/gym/envs/mujoco/assets/ant.xml
+
+code edit... mujoco
+export LD_LIBRARY_PATH= /home/kisang-park/.mujoco/mujoco210/bin${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export MUJOCO_KEY_PATH= /home/kisang-park/.mujoco${MUJOCO_KEY_PATH}
