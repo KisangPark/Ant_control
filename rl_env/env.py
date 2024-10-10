@@ -65,7 +65,7 @@ class ANTENV():
         global_position = self.data.xpos[torso_id][0:1]
         #0,1,2 index for global x,y,z position
 
-        dist = calc.distance(global_position, target_position)
+        dist = calc_distance(global_position, target_position)
 
         if self.is_healthy() == 0:
             done_mask = 1
@@ -98,12 +98,21 @@ class ANTENV():
 
         # control signal to data control
         for i in range(8):
-            self.data.ctrl[i] = ctrl_array[i]
+
+            if ctrl_array[i] != ctrl_array[i]:
+                #print("nan input..")
+                self.data.ctrl[i] = 0
+            else:
+                self.data.ctrl[i] = ctrl_array[i]
+
+        #print(self.data.ctrl)
         
         mujoco.mj_step(self.model, self.data)
         self.action_num += 1
 
-        self.state = np.concatenate(self.data.qpos, self.data.qvel)# 29 number array
+
+        self.state = np.concatenate((np.ndarray.flatten(self.data.qpos), np.ndarray.flatten(self.data.qvel)))# 29 number array
+        self.state = self.state
         #making all state variables to np array
         #self.sard.append(self.next_state)
         

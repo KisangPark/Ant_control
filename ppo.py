@@ -18,11 +18,11 @@ import rl_env.env
 
 # Hyperparameters
 num_episodes = 50
-learning_rate = 0.001
+learning_rate = 0.0001
 gamma = 0.99
 epsilon = 0.
 batch_size = 64
-num_epochs = 10
+num_epochs = 8
 
 model = mujoco.MjModel.from_xml_path('ant.xml')
 data = mujoco.MjData(model)
@@ -32,7 +32,7 @@ state_dim = len(data.qpos) + len(data.qvel)
 #for torch.save
 highest_speed = 1000
 
-work_dir = "home/mujoco/result_files"
+work_dir = "home/Ant_control/result_files"
 
 
 """
@@ -88,13 +88,14 @@ Value network: qpos input, 1 Q value output
 """
 
 def train(state, next_state, reward, done_mask,
-returns, advantages, policy_net, value_net, policy_optimizer, value_optimizer):
+returns, advantages, policy_net, value_net, policy_optimizer, value_optimizer, i):
     #codes for training
     #state(np array), action (array), next state, reward(single value), done mask list return
-    indices = np.random.permutation(len(state_list_tensor))
+
+    indices = np.random.permutation(len(state))
 
     #make batches
-    for start in range(0, len(states_tensor), batch_size):
+    for start in range(0, len(state), batch_size):
         end = start + batch_size
         batch_indices = indices[start:end]
 
@@ -110,32 +111,34 @@ returns, advantages, policy_net, value_net, policy_optimizer, value_optimizer):
         old_log_signal = policy_net(batch_states)
         new_log_signal = policy_net(batch_states)
 
-        for column in range(8):
+        #for column in range(8):
             
-            index = np.zeros(8, len(batch_indices))
-            index[:][column] = 1
+        index = np.zeros((len(old_log_signal), 1))
+        index[:] = i
+        index = torch.LongTensor(index)
             #make index matrix
 
-            old_log_probs = old_log_signal.gather(1, index).log()
-            new_log_probs = new_log_signal.gather(1, index).log()
+
+        old_log_probs = old_log_signal.gather(1, index).log()
+        new_log_probs = new_log_signal.gather(1, index).log()
         
-            ratios = torch.exp(new_log_probs - old_log_probs)
+        ratios = torch.exp(new_log_probs - old_log_probs)
 
-            surrogate_loss = ratios * batch_advantages
-            clipped_surrogate_loss = torch.clamp(ratios, 1 - epsilon, 1 + epsilon) * batch_advantages
-            policy_loss = -torch.mean(torch.min(surrogate_loss, clipped_surrogate_loss))
+        surrogate_loss = ratios * batch_advantages
+        clipped_surrogate_loss = torch.clamp(ratios, 1 - epsilon, 1 + epsilon) * batch_advantages
+        policy_loss = -torch.mean(torch.min(surrogate_loss, clipped_surrogate_loss))
 
-            # Update policy network
-            policy_optimizer.zero_grad()
-            policy_loss.backward()
-            policy_optimizer.step()
+        # Update policy network
+        policy_optimizer.zero_grad()
+        policy_loss.backward()
+        policy_optimizer.step()
 
-            # Update value network
-            value_loss = F.mse_loss(value_net(batch_states), batch_returns)
+        # Update value network
+        value_loss = F.mse_loss(value_net(batch_states), batch_returns)
 
-            value_optimizer.zero_grad()
-            value_loss.backward()
-            value_optimizer.step()
+        value_optimizer.zero_grad()
+        value_loss.backward()
+        value_optimizer.step()
 
 
 
@@ -161,24 +164,29 @@ def main():
         total_reward = 0
 
         env.reset()
-        state, action, next_state, reward, done_mask = env.step(np.zeros(8))
+        state, action, next_state, reward, done_mask, success = env.step(np.zeros(8))
         # append values during timesteps -> no from envs... multi agents no!!
+
 
         """execute one episode"""
         while done_mask == 0:
+
+            state_tensor = torch.FloatTensor(next_state)
+            #print(state_tensor)
+
+            with torch.no_grad():
+                policy_action = policy_net(state_tensor).numpy() # torch tensor to np
+
+            #print(policy_action)
+
+            state, action, next_state, reward, done_mask, success = env.step(policy_action)
 
             state_list.append(state)
             action_list.append(action)
             reward_list.append(reward)
             next_state_list.append(next_state)
-            done_list.append(done_mask) # needed?? 
+            done_list.append(done_mask)
 
-            state_tensor = torch.FloatTensor(next_state)
-
-            with torch.no_grad():
-                policy_action = policy_net(state_tensor).numpy() # torch tensor to np
-
-            state, action, next_state, reward, done_mask, success = env.step(policy_action)
 
             total_reward += reward
 
@@ -206,29 +214,44 @@ def main():
         returns = np.zeros_like(reward_list)
         advantages = np.zeros_like(reward_list)
 
+        # to accelerate, states to np array
+        state_list = np.array(state_list)
+        next_state_list = np.array(next_state_list)
+
         #Generalized Advantage Estimation (GAE)
         #calculate advantages and returns
-        for i in reversed(range(len(rewards))):
+        for i in reversed(range(len(reward_list))):
 
-            next_value = 0 if done_list[i] else value_net(torch.FloatTensor(next_state_list[i])).item() # why item()?
-            delta = reward_list[i] + gamma*next_value - value_net(torch.FloatTensor(state_list[i])).item()
+            #print (state_list[0])
+
+            next_value = 0 if done_list[i] else value_net(torch.from_numpy(next_state_list[i]).type(torch.FloatTensor)).item() # why item()?
+
+            delta = reward_list[i] + gamma*next_value - value_net(torch.from_numpy(state_list[i]).type(torch.FloatTensor)).item()
             #delta: Q value difference from value net
 
             advantages[i] = delta
-            returns[i] = reward_list[i] + gamma*(returns[i+1] if t+1 < len(rewards) else 0)
+            returns[i] = reward_list[i] + gamma*(returns[i+1] if i+1 < len(reward_list) else 0)
 
         state_list_tensor = torch.FloatTensor(state_list)
+        print (state_list_tensor)
+        F.normalize(state_list_tensor)
+        print ("normalized,", state_list_tensor)
+
         action_list_tensor = torch.FloatTensor(action_list)
+
         next_state_tensor = torch.FloatTensor(next_state_list)
+        F.normalize(next_state_tensor)
+
         returns_tensor = torch.FloatTensor(returns)
         advantages_tensor = torch.FloatTensor(advantages)
 
         #now train
-        for _ in range(num_epochs):
+        for i in range(num_epochs):
 
             train(state_list_tensor, next_state_tensor, reward_list, done_list,
-            returns_tensor, advantages_tensor, policy_net, value_net, policy_optimizer, value_optimizer)
+            returns_tensor, advantages_tensor, policy_net, value_net, policy_optimizer, value_optimizer, i)
             
+            print(i, "episode trained")
             #one episode trained
         #epoch number trained
 
@@ -251,11 +274,107 @@ then!!
 
 """
 
-
 def main_render():
-    return 0
-    #training with rendering, for check
-    #advantages_tensor
+    #just training, no rendering
+
+    #load environment
+    env = rl_env.env.ANTENV()
+    
+    #define all the networks & optimizers needed
+    policy_net = policy_network(state_dim)
+    value_net = value_network(state_dim)
+
+    policy_optimizer = optim.Adam(policy_net.parameters(), lr=learning_rate)
+    value_optimizer = optim.Adam(value_net.parameters(), lr=learning_rate)
+
+
+    #episode loop
+
+    for episode in range(num_episodes): 
+        state_list, action_list, reward_list, next_state_list, done_list = [], [], [], [], []
+        total_reward = 0
+
+        env.reset()
+        state, action, next_state, reward, done_mask, success = env.step(np.zeros(8))
+        # append values during timesteps -> no from envs... multi agents no!!
+
+
+        #initialize viewer
+        with mujoco.viewer.launch_passive(model, data) as viewer:
+
+
+            """execute one episode"""
+            while done_mask == 0:
+
+                state_list.append(state)
+                action_list.append(action)
+                reward_list.append(reward)
+                next_state_list.append(next_state)
+                done_list.append(done_mask) # needed?? 
+
+                state_tensor = torch.FloatTensor(next_state)
+
+                with torch.no_grad():
+                    policy_action = policy_net(state_tensor).numpy() # torch tensor to np
+
+                state, action, next_state, reward, done_mask, success = env.step(policy_action)
+
+                total_reward += reward
+
+                viewer.sync()
+
+            print("Episode, total reward:", total_reward)
+
+        #now one episode finished, list returned
+        #returns, GAE (advantages), convert to tensors -> and then train (for epoch, batch)
+
+            """check success"""
+
+            if success == 1:
+            
+                today = get_today()
+                num = env.return_self_action_num()
+
+                if num < highest_speed:
+
+                    torch.save(policy_net, work_dir + "/policy" + "_" + num + "_" + today + ".pt")
+                    torch.save(value_net, work_dir + "/value" + "_" + num + "_" + today + ".pt")
+
+                    highest_speed = num
+
+            # initialize returns & rewards
+            reward_list = np.array(reward_list)
+            returns = np.zeros_like(reward_list)
+            advantages = np.zeros_like(reward_list)
+
+            #Generalized Advantage Estimation (GAE)
+            #calculate advantages and returns
+            for i in reversed(range(len(rewards))):
+
+                next_value = 0 if done_list[i] else value_net(torch.FloatTensor(next_state_list[i])).item() # why item()?
+                delta = reward_list[i] + gamma*next_value - value_net(torch.FloatTensor(state_list[i])).item()
+                #delta: Q value difference from value net
+
+                advantages[i] = delta
+                returns[i] = reward_list[i] + gamma*(returns[i+1] if t+1 < len(rewards) else 0)
+
+            state_list_tensor = torch.FloatTensor(state_list)
+            action_list_tensor = torch.FloatTensor(action_list)
+            next_state_tensor = torch.FloatTensor(next_state_list)
+            returns_tensor = torch.FloatTensor(returns)
+            advantages_tensor = torch.FloatTensor(advantages)
+
+        #now train
+            for _ in range(num_epochs):
+
+                train(state_list_tensor, next_state_tensor, reward_list, done_list,
+                returns_tensor, advantages_tensor, policy_net, value_net, policy_optimizer, value_optimizer)
+            
+                #one episode trained
+            #epoch number trained
+
+    print ("all episodes executed")
+
 
 def eval():
     return 0
@@ -265,6 +384,7 @@ def eval():
 
 if __name__ == '__main__':
     main()
+    #main_render()
     #eval()
 
 
