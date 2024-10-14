@@ -18,7 +18,7 @@ import rl_env.env
 
 # Hyperparameters
 num_episodes = 50
-learning_rate = 0.0001
+learning_rate = 0.001
 gamma = 0.99
 epsilon = 0.
 batch_size = 64
@@ -26,6 +26,7 @@ num_epochs = 8
 
 model = mujoco.MjModel.from_xml_path('ant.xml')
 data = mujoco.MjData(model)
+
 #model info needed for functions
 state_dim = len(data.qpos) + len(data.qvel)
 
@@ -134,6 +135,7 @@ returns, advantages, policy_net, value_net, policy_optimizer, value_optimizer, i
         policy_optimizer.step()
 
         # Update value network
+        batch_returns = batch_returns.unsqueeze(dim=1)
         value_loss = F.mse_loss(value_net(batch_states), batch_returns)
 
         value_optimizer.zero_grad()
@@ -181,6 +183,8 @@ def main():
 
             state, action, next_state, reward, done_mask, success = env.step(policy_action)
 
+            #print("state recieved:", state) -> recieved state is good
+
             state_list.append(state)
             action_list.append(action)
             reward_list.append(reward)
@@ -216,13 +220,12 @@ def main():
 
         # to accelerate, states to np array
         state_list = np.array(state_list)
+        #print("state list:", state_list) -> problem occurs after one episode -> 
         next_state_list = np.array(next_state_list)
 
         #Generalized Advantage Estimation (GAE)
         #calculate advantages and returns
         for i in reversed(range(len(reward_list))):
-
-            #print (state_list[0])
 
             next_value = 0 if done_list[i] else value_net(torch.from_numpy(next_state_list[i]).type(torch.FloatTensor)).item() # why item()?
 
@@ -234,10 +237,13 @@ def main():
 
         state_list_tensor = torch.FloatTensor(state_list)
         print (state_list_tensor)
-        F.normalize(state_list_tensor)
-        print ("normalized,", state_list_tensor)
+        """
+        too much value difference...
+        """
+        #F.normalize(state_list_tensor)
+        #print ("normalized,", state_list_tensor)
 
-        action_list_tensor = torch.FloatTensor(action_list)
+        action_list_tensor = torch.FloatTensor(np.array(action_list))
 
         next_state_tensor = torch.FloatTensor(next_state_list)
         F.normalize(next_state_tensor)

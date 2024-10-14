@@ -16,6 +16,9 @@ import random
 import mujoco
 import mujoco.viewer
 
+import os
+os.environ["PYOPENGL_PLATFORM"] = 'egl'
+
 m = mujoco.MjModel.from_xml_path('ant.xml')
 d = mujoco.MjData(m)
 i=0

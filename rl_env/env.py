@@ -95,13 +95,15 @@ class ANTENV():
 
         action = ctrl_array
         #self.sard.append(action)
+        #print("action:", action)
 
         # control signal to data control
         for i in range(8):
 
             if ctrl_array[i] != ctrl_array[i]:
                 #print("nan input..")
-                self.data.ctrl[i] = 0
+                self.data.ctrl[i] = 1
+                print("ctrl signal changed to 0")
             else:
                 self.data.ctrl[i] = ctrl_array[i]
 
@@ -110,8 +112,10 @@ class ANTENV():
         mujoco.mj_step(self.model, self.data)
         self.action_num += 1
 
-
-        self.state = np.concatenate((np.ndarray.flatten(self.data.qpos), np.ndarray.flatten(self.data.qvel)))# 29 number array
+        print ("position:", self.data.qpos)
+        print ("velocity:", self.data.qvel)
+        qvel_equalized = self.data.qvel * 10
+        self.state = np.concatenate((np.ndarray.flatten(self.data.qpos), np.ndarray.flatten(qvel_equalized)))# 29 number array
         self.state = self.state
         #making all state variables to np array
         #self.sard.append(self.next_state)
