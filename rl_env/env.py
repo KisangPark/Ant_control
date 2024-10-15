@@ -112,8 +112,8 @@ class ANTENV():
         mujoco.mj_step(self.model, self.data)
         self.action_num += 1
 
-        print ("position:", self.data.qpos)
-        print ("velocity:", self.data.qvel)
+        #print ("position:", self.data.qpos)
+        #print ("velocity:", self.data.qvel)
         qvel_equalized = self.data.qvel * 10
         self.state = np.concatenate((np.ndarray.flatten(self.data.qpos), np.ndarray.flatten(qvel_equalized)))# 29 number array
         self.state = self.state
@@ -136,7 +136,7 @@ class ANTENV():
 
         dist = calc_distance(self.data.qpos[0:2], target_position)
         
-        reward = 15 - dist
+        reward = 20 - dist # 15
         #starting from 0.9, end almost at 13~14
 
         if self.is_healthy():
@@ -158,7 +158,7 @@ class ANTENV():
         mujoco.mj_step(self.model, self.data)
 
         self.action_num = 0
-        self.state = []
+        self.state = np.zeros(29)
 
 
     def is_healthy(self):
