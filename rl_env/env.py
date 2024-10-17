@@ -8,7 +8,7 @@ import time
 import mujoco
 
 #hyper parameters
-max_action_num = 1000
+max_action_num = 3000
 minimum_dist = 2
 target_position = [15, 0]
 
