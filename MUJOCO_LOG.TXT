@@ -40,3 +40,15 @@ WARNING: Nan, Inf or huge value in CTRL at ACTUATOR 0. The simulation is unstabl
 Thu Oct 17 13:32:04 2024
 ERROR: could not create window
 
+Thu Oct 17 14:10:31 2024
+ERROR: could not create window
+
+Wed Oct 23 03:40:16 2024
+ERROR: could not create window
+
+Wed Oct 23 03:50:43 2024
+ERROR: could not create window
+
+Wed Oct 23 04:04:59 2024
+ERROR: could not create window
+

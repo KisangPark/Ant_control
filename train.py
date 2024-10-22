@@ -375,6 +375,8 @@ def eval():
     act_path = os.path.join(work_dir, "action_3001_2024-10-17_13-30-20.pt")
     dev_path = os.path.join(work_dir, "dev_3001_2024-10-17_13-30-20.pt")
 
+    i=0
+
     agent = eval_net(state_dim, act_path, dev_path)
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
@@ -385,6 +387,12 @@ def eval():
             action = agent(state)
             data.ctrl = action
             mujoco.mj_step(model,data)
+
+            i+=1
+            if (i%100 == 0):
+                print("100 steps")
+            #print("step")
+            viewer.sync()
 
     #test the torch model
     #evaluation
