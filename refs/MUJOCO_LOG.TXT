@@ -1,6 +1,0 @@
-Fri Oct 11 00:14:03 2024
-ERROR: could not create window
-
-Fri Oct 11 00:29:28 2024
-ERROR: could not create window
-

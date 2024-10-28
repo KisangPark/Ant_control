@@ -32,12 +32,12 @@ batch_size = 64
 num_epochs = 10
 min_covariance = 0.7
 
-model = mujoco.MjModel.from_xml_path('ant.xml')
+model = mujoco.MjModel.from_xml_path('ant_with_goal.xml') #xml file changed
 data = mujoco.MjData(model)
 
 state_dim = len(data.qpos) + len(data.qvel)
 
-highest_speed = 3000 # maximum steps
+highest_speed = 1000 # maximum steps
 
 work_dir = "/home/kisang-park/Ant_control/result_files"
 
@@ -260,11 +260,16 @@ class PPOagent():
 
 def main():
 
+    #cuda
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     #load environment
     env = rl_env.env.ANTENV()
 
     #define PPO agent
     agent = PPOagent(state_dim)
+    #to cuda gpu
+    agent.to(device)
 
     #episode loop
     for episode in range(num_episodes):
@@ -278,6 +283,10 @@ def main():
 
         """execute one episode"""
         while done_mask == 0:
+
+            #to device
+            state.to(device)
+            
             policy_distribution = agent.action(state) #return action & qvalue
             policy_action = policy_distribution.sample().numpy()
             state, action, next_state, reward, done_mask, success = env.step(policy_action)
@@ -298,9 +307,10 @@ def main():
 
 
         #if success
-        if success == 1 or total_reward>2:
+        if success == 1:
 
             num = env.return_self_action_num()
+            num.to(device) # method, needed?
 
             agent.return_net(num)
 
@@ -315,8 +325,16 @@ def main():
         dones = np.asarray(dones)
         old_probs = np.asarray(old_probs)
 
+        states.to(device)
+        actions.to(device)
+        rewards.to(device)
+        next_states.to(device)
+        dones.to(device)
+        old_probs.to(device)
+
         for i in range(num_epochs):
             agent.train(states, actions, rewards, next_states, dones, old_probs)
+            print("train", i)
             #print(i, "epochs trained")
             #one episode trained
         #epoch number trained
@@ -388,20 +406,25 @@ def eval():
             data.ctrl = action
             mujoco.mj_step(model,data)
 
+            #print("dist:", np.sqrt(np.sum(np.square(data.qpos[0:2] - [15, 0]))))
+            #dist correctly calculated
+
             i+=1
             if (i%100 == 0):
-                print("100 steps")
+                print("100 steps", data.qpos[2])
             #print("step")
             viewer.sync()
+
+            viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
 
     #test the torch model
     #evaluation
 
 
 if __name__ == '__main__':
-    #main()
+    main()
     
-    eval()
+    #eval()
 
 
 

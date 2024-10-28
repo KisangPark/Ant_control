@@ -8,9 +8,9 @@ import time
 import mujoco
 
 #hyper parameters
-max_action_num = 3000
+max_action_num = 1000
 minimum_dist = 2
-target_position = [15, 0]
+target_position = [3, 0]
 
 
 
@@ -136,7 +136,7 @@ class ANTENV():
 
         dist = calc_distance(self.data.qpos[0:2], target_position)
         
-        reward = 20 - dist # 15
+        reward = 16 - dist # 15
         #starting from 0.9, end almost at 13~14
 
         if self.is_healthy():
@@ -164,7 +164,7 @@ class ANTENV():
     def is_healthy(self):
         #qpos z value check
         z_pos = self.data.qpos[2]
-        if z_pos < 0.5 and z_pos > 0.8: #unhealthy case
+        if z_pos < 0.45 and z_pos > 0.8: #unhealthy case
             return 0
         else:
             return 1
