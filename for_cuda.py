@@ -1,3 +1,8 @@
+
+"""make every data input change in main,
+not in agent!!"""
+
+
 """Pre-code"""
 
 import os
@@ -104,21 +109,6 @@ class QNetwork(nn.Module):
         return x
 
 
-class value_network(nn.Module):
-
-    def __init__(self, state_dim):
-
-        super().__init__()
-        
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 1)
-
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        return x
 
 """Network Definition"""
 
@@ -139,14 +129,23 @@ class PPOagent():
         self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=learning_rate)
 
     def action (self, state): #state is np.ndarray
+
+    #device input needed..??
+
         #for action case, no need to multivariate normal... just normal with std_dev
         with torch.no_grad():
 
             state_tensor = torch.FloatTensor(state)
 
+            state_tensor.to(device)
+
             mean = self.act_net(state_tensor)#.unsqueeze(dim=0).transpose(0,1)
             #positive definite
             deviation = self.dev_net(state_tensor)
+
+            mean.to("cpu")
+            deviation.to("cpu")
+
             cov_matrix = torch.diag(deviation)
             cov_matrix= torch.mm(cov_matrix, cov_matrix.t()) + torch.eye(len(deviation))*min_covariance
 
@@ -253,6 +252,11 @@ class PPOagent():
 
         print("success case returned, highest_speed:", highest_speed)
 
+    def to_device(self, device):
+        self.act_net.to(device)
+        self.dev_net.to(device)
+        self.value_net.to(device)
+
 
 
 """main"""
@@ -262,14 +266,14 @@ def main():
 
     #cuda
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
 
     #load environment
     env = rl_env.env.ANTENV()
 
     #define PPO agent
     agent = PPOagent(state_dim)
-    #to cuda gpu
-    agent.to(device)
+
 
     #episode loop
     for episode in range(num_episodes):
@@ -283,9 +287,6 @@ def main():
 
         """execute one episode"""
         while done_mask == 0:
-
-            #to device
-            state.to(device)
             
             policy_distribution = agent.action(state) #return action & qvalue
             policy_action = policy_distribution.sample().numpy()
@@ -310,7 +311,6 @@ def main():
         if success == 1:
 
             num = env.return_self_action_num()
-            num.to(device) # method, needed?
 
             agent.return_net(num)
 
@@ -325,12 +325,6 @@ def main():
         dones = np.asarray(dones)
         old_probs = np.asarray(old_probs)
 
-        states.to(device)
-        actions.to(device)
-        rewards.to(device)
-        next_states.to(device)
-        dones.to(device)
-        old_probs.to(device)
 
         for i in range(num_epochs):
             agent.train(states, actions, rewards, next_states, dones, old_probs)
@@ -422,9 +416,9 @@ def eval():
 
 
 if __name__ == '__main__':
-    #main()
+    main()
     
-    eval()
+    #eval()
 
 
 
