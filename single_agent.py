@@ -30,7 +30,7 @@ import rl_env.env
 
 
 # Hyperparameters
-num_episodes = 3000
+num_episodes = 1000
 learning_rate = 0.0005
 gamma = 0.99
 epsilon = 0.2
@@ -342,6 +342,8 @@ def main():
 
             agent.return_net(num)
 
+            plot(rewards_forplot, 1, 1)
+
 
 
         #train loop for epochs
@@ -413,8 +415,8 @@ class eval_net(nn.Module):
 
 def eval():
 
-    act_path = os.path.join(work_dir, "action_3001_2024-10-17_13-30-20.pt")
-    dev_path = os.path.join(work_dir, "dev_3001_2024-10-17_13-30-20.pt")
+    act_path = os.path.join(work_dir, "action_368_2024-10-31_15-48-11.pt")
+    dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0
 

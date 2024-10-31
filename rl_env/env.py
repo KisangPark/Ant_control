@@ -10,7 +10,7 @@ import mujoco
 #hyper parameters
 max_action_num = 1000
 minimum_dist = 1
-target_position = [3, 0]
+target_position = [10, 0]
 
 
 
@@ -136,11 +136,11 @@ class ANTENV():
 
         dist = calc_distance(self.data.qpos[0:2], target_position)
         
-        reward = 4 - dist # 15
+        reward = np.exp((10 - dist)/2) # 15
         #starting from 0.9, end almost at 13~14
 
         if self.is_healthy():
-            reward += 0.5
+            reward += 1
 
         if done_mask and not success:
             reward = 0
