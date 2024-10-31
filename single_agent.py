@@ -18,13 +18,19 @@ from torch.distributions import MultivariateNormal, Normal
 import mujoco
 import mujoco.viewer
 
+#is_ipython = 'inline' in matplotlib.get_backend()
+#if is_ipython:
+from IPython import display
+
+plt.ion()
+
 os.environ["PYOPENGL_PLATFORM"] = 'egl'
 
 import rl_env.env
 
 
 # Hyperparameters
-num_episodes = 30000
+num_episodes = 3000
 learning_rate = 0.0005
 gamma = 0.99
 epsilon = 0.2
@@ -49,6 +55,27 @@ def get_today():
     now = time.localtime()
     s = "%04d-%02d-%02d_%02d-%02d-%02d" % (now.tm_year, now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
     return s
+
+
+def plot(reward, episode, flag):
+    if episode%10 == 0:
+
+        plt.figure(2)
+        plt.cla() #delete all
+        #durations_t = torch.tensor(laptimes, dtype=torch.float) #torch float tensor for duration
+        plt.title('Result plot')
+        plt.xlabel('Episode')
+        plt.ylabel('Total Reward')
+        plt.plot(reward) # torch tensor to numpy
+        plt.pause(0.01)
+
+    if flag==1:
+        plt.savefig('result_plot.png')
+
+
+
+
+
 
 """pre-code"""
 
@@ -268,14 +295,16 @@ def main():
 
     #define PPO agent
     agent = PPOagent(state_dim)
-    #to cuda gpu
-    agent.to(device)
+
+    rewards_forplot = [] #for plot
 
     #episode loop
     for episode in range(num_episodes):
         
         states, actions, rewards, next_states, dones, old_probs = [], [], [], [], [], []
         total_reward = 0
+        success = 0
+        
         env.reset()
 
         state, action, next_state, reward, done_mask, success = env.step(np.zeros(8))
@@ -283,9 +312,6 @@ def main():
 
         """execute one episode"""
         while done_mask == 0:
-
-            #to device
-            state.to(device)
             
             policy_distribution = agent.action(state) #return action & qvalue
             policy_action = policy_distribution.sample().numpy()
@@ -301,16 +327,18 @@ def main():
 
             total_reward += reward
         
-        total_reward = total_reward*0.0001
+        total_reward = total_reward*0.001
 
         print(episode, "Episode executed, total reward:", total_reward)
+
+        rewards_forplot.append(total_reward)
+        plot(rewards_forplot, episode, 0)
 
 
         #if success
         if success == 1:
 
             num = env.return_self_action_num()
-            num.to(device) # method, needed?
 
             agent.return_net(num)
 
@@ -325,22 +353,17 @@ def main():
         dones = np.asarray(dones)
         old_probs = np.asarray(old_probs)
 
-        states.to(device)
-        actions.to(device)
-        rewards.to(device)
-        next_states.to(device)
-        dones.to(device)
-        old_probs.to(device)
 
         for i in range(num_epochs):
             agent.train(states, actions, rewards, next_states, dones, old_probs)
-            print("train", i)
+            #print("train", i)
             #print(i, "epochs trained")
             #one episode trained
         #epoch number trained
         #print("episode trained")
 
     print ("all episodes executed")
+    plot(rewards_forplot, 1, 1)
 
 
 
@@ -422,9 +445,9 @@ def eval():
 
 
 if __name__ == '__main__':
-    #main()
+    main()
     
-    eval()
+    #eval()
 
 
 
@@ -434,20 +457,15 @@ if __name__ == '__main__':
 
 def plot_durations(laptimes):
     plt.figure(2)
-    plt.clf()
-    durations_t = torch.tensor(laptimes, dtype=torch.float)
-    plt.title('Training...')
+    plt.clf() #delete all
+    durations_t = torch.tensor(laptimes, dtype=torch.float) #torch float tensor for duration
+    plt.title('Result plot')
     plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
-    # 10개의 에피소드 평균을 가져 와서 도표 그리기
-    if len(durations_t) >= 10:
-        means = durations_t.unfold(0, 10, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(9), means))
-        plt.plot(means.numpy())
+    plt.ylabel('Total Reward')
+    plt.plot(durations_t.numpy()) # torch tensor to numpy
+
 
     plt.pause(0.001)  # 도표가 업데이트되도록 잠시 멈춤
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
+    plt.show()
+
 """
