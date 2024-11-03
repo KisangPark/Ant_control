@@ -36,7 +36,7 @@ gamma = 0.99
 epsilon = 0.2
 batch_size = 64
 num_epochs = 10
-min_covariance = 0.7
+std_dev = np.exp(-0.7) #0.7
 
 model = mujoco.MjModel.from_xml_path('ant_with_goal.xml') #xml file changed
 data = mujoco.MjData(model)
@@ -98,7 +98,7 @@ class PolicyActNetwork(nn.Module):
         x = F.tanh(self.fc3(x)) #from -1 to 1
         return x
 
-class PolicyDevNetwork(nn.Module):
+"""class PolicyDevNetwork(nn.Module):
 
     def __init__(self, state_dim):
 
@@ -113,7 +113,7 @@ class PolicyDevNetwork(nn.Module):
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x)) #for standard deviation
         return x
-
+"""
 class QNetwork(nn.Module):
 
     def __init__(self, state_dim):
@@ -158,11 +158,11 @@ class PPOagent():
     def __init__(self, state_dim):
 
         self.act_net = PolicyActNetwork(state_dim)
-        self.dev_net = PolicyDevNetwork(state_dim)
+        #self.dev_net = PolicyDevNetwork(state_dim)
         self.value_net = QNetwork(state_dim)
 
         self.act_optimizer = optim.Adam(self.act_net.parameters(), lr=learning_rate)
-        self.dev_optimizer = optim.Adam(self.dev_net.parameters(), lr=learning_rate)
+        #self.dev_optimizer = optim.Adam(self.dev_net.parameters(), lr=learning_rate)
         self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=learning_rate)
 
     def action (self, state): #state is np.ndarray
@@ -173,13 +173,15 @@ class PPOagent():
 
             mean = self.act_net(state_tensor)#.unsqueeze(dim=0).transpose(0,1)
             #positive definite
-            deviation = self.dev_net(state_tensor)
-            cov_matrix = torch.diag(deviation)
-            cov_matrix= torch.mm(cov_matrix, cov_matrix.t()) + torch.eye(len(deviation))*min_covariance
+            #deviation = self.dev_net(state_tensor)
+            #cov_matrix = torch.diag(deviation)
+            #cov_matrix= torch.mm(cov_matrix, cov_matrix.t()) + torch.eye(len(deviation))*min_covariance
+
+            dev_matrix = torch.eye(len(mean)) * std_dev
 
         #calculate distribution
             #print(deviation.size(), mean.size())
-            distribution = MultivariateNormal(mean, cov_matrix)
+            distribution = MultivariateNormal(mean, dev_matrix)
             #print(distribution)
 
             #action = distribution.sample()
@@ -229,19 +231,20 @@ class PPOagent():
         """GAE & surrogate loss"""
         losses = []
         batch_mean = self.act_net(torch.FloatTensor(batch_states))
-        batch_dev = self.dev_net(torch.FloatTensor(batch_states))
+        #batch_dev = self.dev_net(torch.FloatTensor(batch_states))
 
         for i in range(len(batch_states)):
-            cov_matrix = torch.diag(batch_dev[i])
-            cov_matrix= torch.mm(cov_matrix, cov_matrix.t()) + torch.eye(len(batch_dev[i]))*min_covariance
-            batch_dist = MultivariateNormal(batch_mean[i], cov_matrix)
+            #cov_matrix = torch.diag(batch_dev[i])
+            #cov_matrix= torch.mm(cov_matrix, cov_matrix.t()) + torch.eye(len(batch_dev[i]))*min_covariance
+            dev_matrix = torch.eye(len(batch_mean[i])) * std_dev
+            batch_dist = MultivariateNormal(batch_mean[i], dev_matrix)
             new_prob = batch_dist.log_prob(torch.FloatTensor(batch_actions[i]))
             ratio = torch.exp(new_prob - batch_old_probs[i])
 
             sur_loss = ratio * batch_advantages[i]
             clipped_loss = torch.clamp(ratio, 1-epsilon, 1+epsilon) * batch_advantages[i]
             #print(sur_loss, clipped_loss)
-            loss = -torch.min(sur_loss, clipped_loss)
+            loss = -torch.min(sur_loss, clipped_loss) #maximize surrogate objective
             #print(act_loss)
             losses.append(loss)
             #print(new_prob) # good values...
@@ -297,6 +300,7 @@ def main():
     agent = PPOagent(state_dim)
 
     rewards_forplot = [] #for plot
+    std_dev = np.exp(-0.7)
 
     #episode loop
     for episode in range(num_episodes):
@@ -304,6 +308,7 @@ def main():
         states, actions, rewards, next_states, dones, old_probs = [], [], [], [], [], []
         total_reward = 0
         success = 0
+        std_dev = std_dev/np.exp(-0.0001)
         
         env.reset()
 
