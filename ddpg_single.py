@@ -37,8 +37,8 @@ num_episodes = 1000
 learning_rate = 0.0005
 gamma = 0.99
 tau = 0.005
-batch_size = 64
-buffer_size = 100000
+batch_size = 128 #64
+buffer_size = 1000000
 num_epochs = 10
 
 state_dim = 29
@@ -107,7 +107,8 @@ class Critic(nn.Module):
         self.fc3 = nn.Linear(300, 1)
 
     def forward(self, state, action):
-        x = torch.cat([state, action], dim=1)
+        print(state.size(), action.size())
+        x = torch.cat([state, action], dim=2) #1
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         return self.fc3(x)
@@ -121,15 +122,15 @@ class ReplayBuffer:
         self.buffer.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size):
-        batch = random.sample(self.buffer, batch_size)
+        batch = random.sample(self.buffer, batch_size) #list of np ndarrays returned
         states, actions, rewards, next_states, dones = zip(*batch)
         return (
             torch.FloatTensor(states),
             torch.FloatTensor(actions),
             torch.FloatTensor(rewards).unsqueeze(1),
             torch.FloatTensor(next_states),
-            torch.FloatTensor(dones).unsqueeze(1),
-        )
+            torch.FloatTensor(dones).unsqueeze(1)#,
+            )#returns 
 
     def size(self):
         return len(self.buffer)
@@ -147,7 +148,7 @@ load actor network state dictionary to target network
 [critic same]
 replay buffer define, max action (그냥 전역변수 쓰면 안되나?)
 
-2. select_action
+2. action
 put state to actor network, take it to cpu, numpy, flatten
 
 3. train
@@ -170,34 +171,36 @@ change in main -> episode execution & buffer add
 
 class DDPGAgent:
     def __init__(self, state_dim, action_dim): #max_action
-        self.actor = Actor(state_dim, action_dim, max_action)#.to(device)
-        self.actor_target = Actor(state_dim, action_dim, max_action)#.to(device)
+        self.actor = Actor(state_dim, action_dim)#.to(device)
+        self.actor_target = Actor(state_dim, action_dim)#.to(device)
         self.actor_target.load_state_dict(self.actor.state_dict())
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=LR_ACTOR)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=learning_rate)
 
         self.critic = Critic(state_dim, action_dim)#.to(device)
         self.critic_target = Critic(state_dim, action_dim)#.to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=LR_CRITIC)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=learning_rate)
 
-        self.replay_buffer = ReplayBuffer(BUFFER_SIZE)
+        self.replay_buffer = ReplayBuffer(buffer_size)
         #self.max_action = max_action
 
-    def select_action(self, state):
-        state = torch.FloatTensor(state).unsqueeze(0)#.to(device)
-        return self.actor(state).numpy().flatten()
-        #return self.actor(state).cpu().data.numpy().flatten()
+    def action(self, state):
+        with torch.no_grad():
+            state = torch.FloatTensor(state) #.unsqueeze(0)#.to(device)
+        return self.actor(state).detach().numpy()
+            #return self.actor(state).cpu().data.numpy().flatten()
 
     def train(self):
-        if self.replay_buffer.size() < BATCH_SIZE:
+        if self.replay_buffer.size() < batch_size:
             return
 
-        states, actions, rewards, next_states, dones = self.replay_buffer.sample(BATCH_SIZE)
+        states, actions, next_states, rewards, dones = self.replay_buffer.sample(batch_size) #order...
+        #return 1x64 array, each element is np ndarray
 
         # Critic loss
         with torch.no_grad():
-            next_actions = self.actor_target(next_states)
-            target_q = rewards + (1 - dones) * GAMMA * self.critic_target(next_states, next_actions)
+            next_actions = self.actor_target(next_states) #torch tensor of list of np nd array return
+            target_q = rewards + (1 - dones) * gamma * self.critic_target(next_states, next_actions)
         current_q = self.critic(states, actions)
         critic_loss = nn.MSELoss()(current_q, target_q)
 
@@ -242,7 +245,7 @@ def main():
     env = rl_env.env.ANTENV()
 
     #define PPO agent
-    agent = DDPGAgent(state_dim + action_dim)
+    agent = DDPGAgent(state_dim, action_dim)
 
     #for plot
     rewards_forplot = []
@@ -263,9 +266,9 @@ def main():
         """execute one episode"""
         while done_mask == 0:
             
-            action = agent.select_action(state)
+            action = agent.action(state)
             
-            state, action, next_state, reward, done_mask, success = env.step(action)
+            state, action, next_state, reward, done_mask, success = env.step(action) #env returns: np ndarray
             agent.replay_buffer.add(state, action, next_state,reward, done_mask)
             #noticed! -> can access to self variables using dot methods
             
@@ -297,3 +300,9 @@ def main():
 
     print ("all episodes executed")
     plot(rewards_forplot, 1, 1)
+
+
+if __name__ == '__main__':
+    main()
+
+    #eval()

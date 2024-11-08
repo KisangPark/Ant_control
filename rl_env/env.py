@@ -116,7 +116,6 @@ class ANTENV():
         #print ("velocity:", self.data.qvel)
         qvel_equalized = self.data.qvel * 10
         self.state = np.concatenate((np.ndarray.flatten(self.data.qpos), np.ndarray.flatten(qvel_equalized)))# 29 number array
-        self.state = self.state
         #making all state variables to np array
         #self.sard.append(self.next_state)
         
