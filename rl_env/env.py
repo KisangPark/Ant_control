@@ -135,7 +135,8 @@ class ANTENV():
 
         dist = calc_distance(self.data.qpos[0:2], target_position)
         
-        reward = np.exp((10 - dist)/2) # 15
+        reward = 11-dist
+        #reward = np.exp((10 - dist)/2) # 15
         #starting from 0.9, end almost at 13~14
 
         if self.is_healthy():

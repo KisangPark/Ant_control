@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collections import deque
-from torch.distributions import MultivariateNormal
+from torch.distributions import Normal
 
 import mujoco
 import mujoco.viewer
@@ -34,11 +34,11 @@ import rl_env.env
 
 # Hyperparameters
 num_episodes = 1000
-learning_rate = 0.0005
+learning_rate = 0.001
 gamma = 0.99
-tau = 0.005
-batch_size = 128 #64
-buffer_size = 1000000
+TAU = 0.005
+batch_size = 64 #64
+buffer_size = 50000
 num_epochs = 10
 
 state_dim = 29
@@ -89,9 +89,9 @@ buffer: add, sample, size
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Actor, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 400)
-        self.fc2 = nn.Linear(400, 300)
-        self.fc3 = nn.Linear(300, action_dim)
+        self.fc1 = nn.Linear(state_dim, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, action_dim)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -102,13 +102,13 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Critic, self).__init__()
-        self.fc1 = nn.Linear(state_dim + action_dim, 400)
-        self.fc2 = nn.Linear(400, 300)
-        self.fc3 = nn.Linear(300, 1)
+        self.fc1 = nn.Linear(state_dim + action_dim, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 1)
 
     def forward(self, state, action):
-        print(state.size(), action.size())
-        x = torch.cat([state, action], dim=2) #1
+        #print(state.size(), action.size())
+        x = torch.cat([state, action], dim=1) #1
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         return self.fc3(x)
@@ -118,17 +118,19 @@ class ReplayBuffer:
     def __init__(self, max_size):
         self.buffer = deque(maxlen=max_size)
 
-    def add(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
+    def add(self, state, action, next_state, reward, done):
+        self.buffer.append((state, action, next_state, reward, done))
 
     def sample(self, batch_size):
-        batch = random.sample(self.buffer, batch_size) #list of np ndarrays returned
-        states, actions, rewards, next_states, dones = zip(*batch)
+        batch = random.sample(self.buffer, batch_size) 
+        states, actions, next_states, rewards, dones = zip(*batch)
+        #print ("thisthils", len(states), len(next_states))
+        #print(states)
         return (
             torch.FloatTensor(states),
             torch.FloatTensor(actions),
-            torch.FloatTensor(rewards).unsqueeze(1),
             torch.FloatTensor(next_states),
+            torch.FloatTensor(rewards).unsqueeze(1),
             torch.FloatTensor(dones).unsqueeze(1)#,
             )#returns 
 
@@ -192,30 +194,38 @@ class DDPGAgent:
 
     def train(self):
         if self.replay_buffer.size() < batch_size:
+            print("short")
             return
 
         states, actions, next_states, rewards, dones = self.replay_buffer.sample(batch_size) #order...
+        #print("sampled")
         #return 1x64 array, each element is np ndarray
 
         # Critic loss
         with torch.no_grad():
             next_actions = self.actor_target(next_states) #torch tensor of list of np nd array return
+            #print("sizes:", states.size(), next_states.size(), next_actions.size())
             target_q = rewards + (1 - dones) * gamma * self.critic_target(next_states, next_actions)
         current_q = self.critic(states, actions)
         critic_loss = nn.MSELoss()(current_q, target_q)
+        print("critic:", critic_loss)
 
         # Update Critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
+        #print("backprop")
 
         # Actor loss
         actor_loss = -self.critic(states, self.actor(states)).mean()
+        print ("actor:", actor_loss)
 
         # Update Actor
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
+
+        #print(self.replay_buffer.size())
 
         # Update target networks
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
@@ -250,6 +260,9 @@ def main():
     #for plot
     rewards_forplot = []
 
+    #standard deviation
+    std_dev = 0.1
+
     #episode loop
     for episode in range(num_episodes):
         
@@ -257,18 +270,39 @@ def main():
         states, actions, rewards, next_states, dones = [], [], [], [], []
         total_reward = 0
         success = 0
+
+        #Noise distrbution, preventing deadlock
+        distribution = Normal(0, std_dev)
         
         #initialize environment
         env.reset()
         state, action, next_state, reward, done_mask, success = env.step(np.zeros(8))
+        state = np.array(state)
+        action = np.array(action)
+        next_state = np.array(next_state)
+        #reward = np.array(reward)
+        #done_mask = np.array(done_mask)
+        #print("env0:", state.shape, next_state.shape, reward.shape)
 
 
         """execute one episode"""
         while done_mask == 0:
             
             action = agent.action(state)
+            #print("before:", action)
+            noise = []
+            for i in range(8):
+                noise.append(distribution.sample()) 
+            action += np.array(noise)
+            #print("after:", action)
             
             state, action, next_state, reward, done_mask, success = env.step(action) #env returns: np ndarray
+            state = np.array(state)
+            action = np.array(action)
+            next_state = np.array(next_state)
+            #reward = np.array(reward)
+            #done_mask = np.array(done_mask)
+            #print("env1:", state.shape, next_state.shape)
             agent.replay_buffer.add(state, action, next_state,reward, done_mask)
             #noticed! -> can access to self variables using dot methods
             
@@ -297,6 +331,8 @@ def main():
             #one episode trained
         #epoch number trained
         #print("episode trained")
+
+        std_dev = std_dev - 0.0495*(1/1000)
 
     print ("all episodes executed")
     plot(rewards_forplot, 1, 1)
