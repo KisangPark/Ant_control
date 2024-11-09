@@ -18,5 +18,3 @@ class OUNoise:
         self.state = x + dx
         return self.state
 
-# In your main function:
-noise = OUNoise(action_dim)

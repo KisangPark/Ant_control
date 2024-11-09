@@ -31,6 +31,7 @@ plt.ion()
 os.environ["PYOPENGL_PLATFORM"] = 'egl'
 
 import rl_env.env
+from rl_env.OUNoise import OUNoise
 
 
 # Hyperparameters
@@ -277,7 +278,7 @@ def main():
         timestep =0
 
         #Noise distrbution, preventing deadlock
-        distribution = Normal(0, std_dev)
+        #distribution = Normal(0, std_dev)
         
         #initialize environment
         env.reset()
@@ -295,10 +296,11 @@ def main():
             
             action = agent.action(state)
             #print("before:", action)
-            noise = []
-            for i in range(8):
-                noise.append(distribution.sample()) 
-            action += np.array(noise)
+            noise = OUNoise(action_dim).noise()
+            #noise = []
+            #for i in range(8):
+            #    noise.append(distribution.sample()) 
+            action += noise
             #print("after:", action)
             
             state, action, next_state, reward, done_mask, success = env.step(action) #env returns: np ndarray
@@ -316,7 +318,7 @@ def main():
             timestep+=1
 
             if timestep%10 == 0:
-                plot_reward = total_reward/timestep *0.001
+                plot_reward = total_reward/timestep
                 print(timestep, "steped, total reward:", plot_reward)
                 rewards_forplot.append(plot_reward)
                 final_dist = env.return_dist()
