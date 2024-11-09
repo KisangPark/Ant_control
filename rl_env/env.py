@@ -71,9 +71,9 @@ class ANTENV():
             done_mask = 1
             success = 0
 
-        elif self.action_num > max_action_num:
-            done_mask = 1
-            success = 0
+        #elif self.action_num > max_action_num:
+        #    done_mask = 1
+        #    success = 0
 
         elif dist < minimum_dist: #success case
             done_mask = 1

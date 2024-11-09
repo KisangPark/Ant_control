@@ -34,8 +34,8 @@ import rl_env.env
 
 
 # Hyperparameters
-num_episodes = 10000
-learning_rate = 0.001
+num_episodes = 1000
+learning_rate = 0.0001
 gamma = 0.99
 TAU = 0.005
 batch_size = 64 #64
@@ -49,7 +49,7 @@ model = mujoco.MjModel.from_xml_path('ant_with_goal.xml') #xml file changed
 data = mujoco.MjData(model)
 #state_dim = len(data.qpos) + len(data.qvel)
 
-highest_speed = 1000 # maximum steps
+highest_speed = 5000 # maximum steps
 
 work_dir = "/home/kisang-park/Ant_control/result_files"
 
@@ -267,11 +267,14 @@ def main():
 
     #episode loop
     for episode in range(num_episodes):
+
+        print("new episode starts!!")
         
         #pre-execution
         states, actions, rewards, next_states, dones = [], [], [], [], []
         total_reward = 0
         success = 0
+        timestep =0
 
         #Noise distrbution, preventing deadlock
         distribution = Normal(0, std_dev)
@@ -310,21 +313,33 @@ def main():
             
             state = next_state
             total_reward += reward
-        
-        total_reward = total_reward*0.001
-        print(episode, "Episode executed, total reward:", total_reward)
+            timestep+=1
 
-        rewards_forplot.append(total_reward)
-        final_dist = env.return_dist()
-        dist_forplot.append(final_dist)
-        plot(rewards_forplot, dist_forplot, episode, 0)
+            if timestep%10 == 0:
+                plot_reward = total_reward/timestep *0.001
+                print(timestep, "steped, total reward:", plot_reward)
+                rewards_forplot.append(plot_reward)
+                final_dist = env.return_dist()
+                dist_forplot.append(final_dist)
+                plot(rewards_forplot, dist_forplot, timestep, 0)
+
+                for num in range(num_epochs):
+                    agent.train()
+        
+        #total_reward = total_reward/timestep *0.001
+        #print(episode, "Episode executed, total reward:", total_reward)
+
+        #rewards_forplot.append(total_reward)
+        #final_dist = env.return_dist()
+        #dist_forplot.append(final_dist)
+        #plot(rewards_forplot, dist_forplot, episode, 0)
 
 
         #test
-        if(episode == 100):
-            num = env.return_self_action_num()
-            agent.return_net(num)
-            print("saved episode", episode)
+        #if(episode == 100):
+        #    num = env.return_self_action_num()
+        #    agent.return_net(num)
+        #    print("saved episode", episode)
 
 
         #if success
@@ -335,16 +350,16 @@ def main():
 
 
         #train loop for epochs
-        for i in range(num_epochs):
-            agent.train()
+        #for i in range(num_epochs):
+        #    agent.train()
             #print("train", i)
             #print(i, "epochs trained")
             #one episode trained
         #epoch number trained
         #print("episode trained")
 
-        if (episode%100 == 0):
-            std_dev = std_dev*0.9
+        #if (episode%100 == 0):
+        std_dev = std_dev*0.9
 
     print ("all episodes executed")
     plot(rewards_forplot,dist_forplot, 1, 1)
