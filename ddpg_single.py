@@ -10,6 +10,7 @@ DDPG
 
 import os
 import random
+import time
 
 import numpy as np
 import matplotlib
@@ -33,20 +34,20 @@ import rl_env.env
 
 
 # Hyperparameters
-num_episodes = 1000
+num_episodes = 10000
 learning_rate = 0.001
 gamma = 0.99
 TAU = 0.005
 batch_size = 64 #64
 buffer_size = 50000
-num_epochs = 10
+num_epochs = 2
 
 state_dim = 29
 action_dim = 8
 
 model = mujoco.MjModel.from_xml_path('ant_with_goal.xml') #xml file changed
 data = mujoco.MjData(model)
-state_dim = len(data.qpos) + len(data.qvel)
+#state_dim = len(data.qpos) + len(data.qvel)
 
 highest_speed = 1000 # maximum steps
 
@@ -60,8 +61,8 @@ def get_today():
     return s
 
 
-def plot(reward, episode, flag):
-    if episode%10 == 0:
+def plot(reward, dist, episode, flag):
+    if episode%5 == 0:
 
         plt.figure(2)
         plt.cla() #delete all
@@ -70,6 +71,7 @@ def plot(reward, episode, flag):
         plt.xlabel('Episode')
         plt.ylabel('Total Reward')
         plt.plot(reward) # torch tensor to numpy
+        plt.plot(dist)
         plt.pause(0.01)
 
     if flag==1:
@@ -94,8 +96,8 @@ class Actor(nn.Module):
         self.fc3 = nn.Linear(256, action_dim)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = F.tanh(self.fc1(x)) #relu
+        x = F.tanh(self.fc2(x))
         return F.tanh(self.fc3(x))
 
 
@@ -187,8 +189,7 @@ class DDPGAgent:
         #self.max_action = max_action
 
     def action(self, state):
-        with torch.no_grad():
-            state = torch.FloatTensor(state) #.unsqueeze(0)#.to(device)
+        state = torch.FloatTensor(state) #.unsqueeze(0)#.to(device)
         return self.actor(state).detach().numpy()
             #return self.actor(state).cpu().data.numpy().flatten()
 
@@ -208,7 +209,7 @@ class DDPGAgent:
             target_q = rewards + (1 - dones) * gamma * self.critic_target(next_states, next_actions)
         current_q = self.critic(states, actions)
         critic_loss = nn.MSELoss()(current_q, target_q)
-        print("critic:", critic_loss)
+        #print("critic:", critic_loss)
 
         # Update Critic
         self.critic_optimizer.zero_grad()
@@ -218,7 +219,7 @@ class DDPGAgent:
 
         # Actor loss
         actor_loss = -self.critic(states, self.actor(states)).mean()
-        print ("actor:", actor_loss)
+        #print ("actor:", actor_loss)
 
         # Update Actor
         self.actor_optimizer.zero_grad()
@@ -259,6 +260,7 @@ def main():
 
     #for plot
     rewards_forplot = []
+    dist_forplot = []
 
     #standard deviation
     std_dev = 0.1
@@ -313,14 +315,23 @@ def main():
         print(episode, "Episode executed, total reward:", total_reward)
 
         rewards_forplot.append(total_reward)
-        plot(rewards_forplot, episode, 0)
+        final_dist = env.return_dist()
+        dist_forplot.append(final_dist)
+        plot(rewards_forplot, dist_forplot, episode, 0)
+
+
+        #test
+        if(episode == 100):
+            num = env.return_self_action_num()
+            agent.return_net(num)
+            print("saved episode", episode)
 
 
         #if success
         if success == 1:
             num = env.return_self_action_num()
             agent.return_net(num)
-            plot(rewards_forplot, 1, 1)
+            plot(rewards_forplot,dist_forplot, 1, 1)
 
 
         #train loop for epochs
@@ -332,10 +343,67 @@ def main():
         #epoch number trained
         #print("episode trained")
 
-        std_dev = std_dev - 0.0495*(1/1000)
+        if (episode%100 == 0):
+            std_dev = std_dev*0.9
 
     print ("all episodes executed")
-    plot(rewards_forplot, 1, 1)
+    plot(rewards_forplot,dist_forplot, 1, 1)
+
+
+
+
+"""evaluation net"""
+
+class eval_net(nn.Module):
+    def __init__(self, state_dim, action_dim, actor_path):
+        super().__init__()
+
+        self.actor_net = Actor(state_dim, action_dim)
+        #self.critic_net = Critic(state_dim, action_dim)
+
+        self.actor_net.load_state_dict(torch.load(actor_path, weights_only = True))
+        #self.critic_net.load_state_dict(torch.load(critic_path, weights_only = True))
+
+    def forward(self, state):
+        with torch.no_grad():
+            state_tensor = torch.FloatTensor(state)
+
+            action = self.actor_net(state_tensor)
+
+            return action.numpy()
+
+
+def eval():
+
+    actor_path = os.path.join(work_dir, "actor_1001_2024-11-09_12-48-17.pt")
+    #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
+
+    i=0
+
+    agent = eval_net(state_dim, action_dim, actor_path)
+
+    with mujoco.viewer.launch_passive(model, data) as viewer:
+        mujoco.mj_resetData(model, data)
+        while viewer.is_running():
+            qvel_equalized = data.qvel * 10
+            qpos_eqalized = data.qpos *10
+            state = np.concatenate((np.ndarray.flatten(qpos_eqalized), np.ndarray.flatten(qvel_equalized)))
+            action = agent(state)
+            data.ctrl = action
+            mujoco.mj_step(model,data)
+
+            #print("dist:", np.sqrt(np.sum(np.square(data.qpos[0:2] - [15, 0]))))
+            #dist correctly calculated
+
+            i+=1
+            if (i%100 == 0):
+                print("100 steps", data.qpos[2])
+            #print("step")
+            viewer.sync()
+
+            viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
+
+
 
 
 if __name__ == '__main__':

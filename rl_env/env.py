@@ -8,7 +8,7 @@ import time
 import mujoco
 
 #hyper parameters
-max_action_num = 1000
+max_action_num = 2000
 minimum_dist = 1
 target_position = [10, 0]
 
@@ -115,7 +115,12 @@ class ANTENV():
         #print ("position:", self.data.qpos)
         #print ("velocity:", self.data.qvel)
         qvel_equalized = self.data.qvel * 10
-        self.state = np.concatenate((np.ndarray.flatten(self.data.qpos), np.ndarray.flatten(qvel_equalized)))# 29 number array
+        qpos_equalized = self.data.qpos *10
+
+        #print("position values:", qpos_equalized)
+        #print("velocity values:", qvel_equalized)
+
+        self.state = np.concatenate((np.ndarray.flatten(qpos_equalized), np.ndarray.flatten(qvel_equalized)))# 29 number array
         #making all state variables to np array
         #self.sard.append(self.next_state)
         
@@ -133,14 +138,19 @@ class ANTENV():
         """
         # reward return
 
-        dist = calc_distance(self.data.qpos[0:2], target_position)
+        self.dist = calc_distance(self.data.qpos[0:2], target_position)
         
-        reward = 11-dist
+        reward = 2*(11-self.dist) #for gradient, better learning, added gradient
         #reward = np.exp((10 - dist)/2) # 15
         #starting from 0.9, end almost at 13~14
 
+        if self.is_moving():
+            reward += 2
+        else:
+            reward -= 2
+
         if self.is_healthy():
-            reward += 1
+            reward += 0.5
 
         if done_mask and not success:
             reward = 0
@@ -170,9 +180,28 @@ class ANTENV():
         else:
             return 1
 
+    def is_moving(self):
+        #velocity check: non moving minus reward
+        torso_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "torso")
+        velocity = np.zeros(6)
+        mujoco.mj_objectVelocity(self.model,self.data, mujoco.mjtObj.mjOBJ_BODY, torso_id, velocity, 0)
+        xyz_velocity = velocity[:3]
+        absolute_velocity = calc_distance(np.zeros(3), xyz_velocity)
+
+        #print(absolute_velocity)
+
+        if absolute_velocity <0.01:
+            return 0
+        else:
+            return 1
+
+
 
     def return_self_action_num(self):
         return self.action_num
+
+    def return_dist(self):
+        return self.dist
 
 
 """
