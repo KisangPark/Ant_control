@@ -8,7 +8,7 @@ import time
 import mujoco
 
 #hyper parameters
-max_action_num = 5000
+max_action_num = 10000
 minimum_dist = 1
 target_position = [10, 0]
 
@@ -78,6 +78,11 @@ class ANTENV():
         elif dist < minimum_dist: #success case
             done_mask = 1
             success = 1
+
+        elif dist > 13:
+            done_mask = 1
+            sucecss = 0
+
         else:
             done_mask = 0
             success = 0
@@ -140,7 +145,7 @@ class ANTENV():
 
         self.dist = calc_distance(self.data.qpos[0:2], target_position)
         
-        reward = (11-self.dist)*2 #for gradient, better learning, added gradient
+        reward = (11 - self.dist)*2 #for gradient, better learning, added gradient
         #reward = np.exp((10 - dist)/2) # 15
         #starting from 0.9, end almost at 13~14
 
@@ -190,7 +195,7 @@ class ANTENV():
 
         #print(absolute_velocity)
 
-        if absolute_velocity <0.5:
+        if absolute_velocity <0.1:
             return 0
         else:
             return 1

@@ -317,7 +317,7 @@ def main():
             total_reward += reward
             timestep+=1
 
-            if timestep%10 == 0:
+            if timestep%100 == 0:
                 plot_reward = total_reward/timestep
                 print(timestep, "steped, total reward:", plot_reward)
                 rewards_forplot.append(plot_reward)
@@ -325,9 +325,10 @@ def main():
                 dist_forplot.append(final_dist)
                 plot(rewards_forplot, dist_forplot, timestep, 0)
 
-                for num in range(num_epochs):
-                    agent.train()
+                #for num in range(num_epochs):
+                agent.train()
         
+        plot(rewards_forplot,dist_forplot, 1, 1)
         #total_reward = total_reward/timestep *0.001
         #print(episode, "Episode executed, total reward:", total_reward)
 
