@@ -242,7 +242,7 @@ class DDPGAgent:
         today = get_today()
 
         torch.save(self.actor.state_dict(), work_dir + "/actor" + "_" + str(num) + "_" + str(today) + ".pt")
-        torch.save(self.critic.state_dict(), work_dir + "/critic" + "_" + str(num) + "_" + str(today) + ".pt")
+        #torch.save(self.critic.state_dict(), work_dir + "/critic" + "_" + str(num) + "_" + str(today) + ".pt")
         
         highest_speed = num
 
@@ -268,8 +268,6 @@ def main():
 
     #episode loop
     for episode in range(num_episodes):
-
-        print("new episode starts!!")
         
         #pre-execution
         states, actions, rewards, next_states, dones = [], [], [], [], []
@@ -317,8 +315,9 @@ def main():
             total_reward += reward
             timestep+=1
 
+            """training per timestep"""
+            plot_reward = total_reward/timestep
             if timestep%100 == 0:
-                plot_reward = total_reward/timestep
                 print(timestep, "steped, total reward:", plot_reward)
                 rewards_forplot.append(plot_reward)
                 final_dist = env.return_dist()
@@ -326,7 +325,8 @@ def main():
                 plot(rewards_forplot, dist_forplot, timestep, 0)
 
                 #for num in range(num_epochs):
-                agent.train()
+            #if timestep%10 == 0:
+            agent.train()
         
         plot(rewards_forplot,dist_forplot, 1, 1)
         #total_reward = total_reward/timestep *0.001
@@ -344,7 +344,7 @@ def main():
         #    agent.return_net(num)
         #    print("saved episode", episode)
 
-
+        print("episode terminalized, timestep:", timestep)
         #if success
         if success == 1:
             num = env.return_self_action_num()
@@ -393,7 +393,7 @@ class eval_net(nn.Module):
 
 def eval():
 
-    actor_path = os.path.join(work_dir, "actor_1001_2024-11-09_12-48-17.pt")
+    actor_path = os.path.join(work_dir, "actor_1528_2024-11-11_17-21-57.pt")
     #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0
@@ -410,12 +410,20 @@ def eval():
             data.ctrl = action
             mujoco.mj_step(model,data)
 
+            #angle test
+            w, x, y, z = data.qpos[3:7]
+            pitch = np.arcsin(2.0*(w*y - z*x))
+            roll = np.arctan2(2.0*(w*x+y*z), 1.0-2.0*(x*x + y*y))
+            yaw = np.arctan2(2.0*(w*z+y*x), 1.0-2.0*(y*y + z*z))
+
             #print("dist:", np.sqrt(np.sum(np.square(data.qpos[0:2] - [15, 0]))))
             #dist correctly calculated
 
             i+=1
             if (i%100 == 0):
                 print("100 steps", data.qpos[2])
+                print("pitch:", pitch)
+                print ("roll:", roll)
             #print("step")
             viewer.sync()
 

@@ -10,7 +10,7 @@ import mujoco
 #hyper parameters
 max_action_num = 10000
 minimum_dist = 1
-target_position = [10, 0]
+target_position = [5, 0]
 
 
 
@@ -43,6 +43,7 @@ class ANTENV():
         self.xpos = []
 
         self.state = []
+        self.dist = 5
 
 
 
@@ -79,7 +80,7 @@ class ANTENV():
             done_mask = 1
             success = 1
 
-        elif dist > 13:
+        elif dist > 10:
             done_mask = 1
             sucecss = 0
 
@@ -143,19 +144,24 @@ class ANTENV():
         """
         # reward return
 
+        old_dist = self.dist
         self.dist = calc_distance(self.data.qpos[0:2], target_position)
-        
-        reward = (11 - self.dist)*2 #for gradient, better learning, added gradient
-        #reward = np.exp((10 - dist)/2) # 15
-        #starting from 0.9, end almost at 13~14
+
+        if old_dist > self.dist:
+            reward = (6 - self.dist)*2 #for gradient, better learning, added gradient
+            #reward = np.exp((10 - dist)/2) # 15
+            #starting from 0.9, end almost at 13~14
+        else:
+            reward = -2
+       
 
         if self.is_moving():
-            reward += 2
+            reward += 1 #2 in goal 10
         else:
-            reward -= 2
+            reward -= 1
 
-        if self.is_healthy():
-            reward += 0.5
+        #if self.is_healthy():
+        #    reward += 1
 
         if done_mask and not success:
             reward = 0
@@ -175,15 +181,36 @@ class ANTENV():
         self.action_num = 0
         self.state = np.zeros(29)
 
+        self.dist = 5
+
 
 
     def is_healthy(self):
         #qpos z value check
-        z_pos = self.data.qpos[2]
-        if z_pos < 0.45 and z_pos > 0.8: #unhealthy case
+        torso_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "torso")
+        z_pos = self.data.xpos[torso_id][2]
+        #print(self.data.qpos[0:2], z_pos)
+
+        #get quaternion, change into euler angle
+        w, x, y, z = self.data.qpos[3:7]
+        pitch = np.arcsin(2.0*(w*y - z*x))
+        roll = np.arctan2(2.0*(w*x+y*z), 1.0-2.0*(x*x + y*y))
+        yaw = np.arctan2(2.0*(w*z+y*x), 1.0-2.0*(y*y + z*z))
+        #print("pitch:", pitch)
+        #print("roll:", roll)
+
+        max_angle = 1 #np.pi/2
+
+        if z_pos < 0.45 and z_pos>1:
+            return 0
+        elif pitch>max_angle:
+            return 0
+        elif roll>max_angle:
             return 0
         else:
             return 1
+        #torso id position
+
 
     def is_moving(self):
         #velocity check: non moving minus reward
