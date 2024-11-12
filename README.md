@@ -4,4 +4,7 @@
 Train mujoco ant with PPO RL algorithm \
 single & multi-agent control
 
-![image](https://github.com/user-attachments/assets/c37de8f5-bbcc-4c88-8388-3219ba014b86)
+
+
+https://github.com/user-attachments/assets/e043ffd1-24b4-4d7a-ac37-f1d21dcf826a
+
