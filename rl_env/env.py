@@ -10,7 +10,7 @@ import mujoco
 #hyper parameters
 max_action_num = 10000
 minimum_dist = 1
-target_position = [5, 0]
+target_position = [0, 5]
 
 
 
@@ -202,16 +202,31 @@ class ANTENV():
         #print("roll:", roll)
 
         max_angle = 1 #np.pi/2
+        min_angle = -1
 
+        if pitch>max_angle or pitch<min_angle:
+            print("**should be terminalized but no**")
+            return 0
+        if roll>max_angle or roll<min_angle:
+            print("**should be terminalized but no**")
+            return 0
+        if z_pos < 0.4 or z_pos>1:
+            print("**should be terminalized but no**")
+            return 0
+        
+        return 1
+
+        """
         if z_pos < 0.45 and z_pos>1:
             return 0
-        elif pitch>max_angle:
+        elif pitch>max_angle or pitch<min_angle:
             return 0
-        elif roll>max_angle:
+        elif roll>max_angle or roll<min_angle:
             return 0
         else:
             return 1
         #torso id position
+        """
 
 
     def is_moving(self):

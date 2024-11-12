@@ -99,7 +99,8 @@ class Actor(nn.Module):
     def forward(self, x):
         x = F.tanh(self.fc1(x)) #relu
         x = F.tanh(self.fc2(x))
-        return F.tanh(self.fc3(x))
+        x = F.tanh(self.fc3(x))
+        return x/2
 
 
 class Critic(nn.Module):
@@ -248,6 +249,12 @@ class DDPGAgent:
 
         print("success case returned, highest_speed:", highest_speed)
 
+    def load_parameters(self, actor_path):
+
+        #need to return critic also
+        self.actor.load_state_dict(torch.load(actor_path, weights_only = True))
+        self.actor_target.load_state_dict(torch.load(actor_path, weights_only = True))
+
 
 def main():
     #cuda
@@ -393,7 +400,7 @@ class eval_net(nn.Module):
 
 def eval():
 
-    actor_path = os.path.join(work_dir, "actor_7884_2024-11-12_16-06-19.pt")
+    actor_path = os.path.join(work_dir, "actor_1416_2024-11-13_03-58-20.pt")
     #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0
@@ -403,6 +410,7 @@ def eval():
     with mujoco.viewer.launch_passive(model, data) as viewer:
         mujoco.mj_resetData(model, data)
         while viewer.is_running():
+            time.sleep(0.001)# for stable rendering
             qvel_equalized = data.qvel * 10
             qpos_eqalized = data.qpos *10
             state = np.concatenate((np.ndarray.flatten(qpos_eqalized), np.ndarray.flatten(qvel_equalized)))
@@ -422,8 +430,8 @@ def eval():
             i+=1
             if (i%100 == 0):
                 print(i, "steps", data.qpos[2])
-                #print("pitch:", pitch)
-                #print ("roll:", roll)
+                print("pitch:", pitch)
+                print ("roll:", roll)
             #print("step")
             viewer.sync()
 
@@ -433,6 +441,6 @@ def eval():
 
 
 if __name__ == '__main__':
-    main()
+    #main()
 
-    #eval()
+    eval()
