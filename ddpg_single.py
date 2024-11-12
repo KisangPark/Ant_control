@@ -393,7 +393,7 @@ class eval_net(nn.Module):
 
 def eval():
 
-    actor_path = os.path.join(work_dir, "actor_1528_2024-11-11_17-21-57.pt")
+    actor_path = os.path.join(work_dir, "actor_7884_2024-11-12_16-06-19.pt")
     #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0
@@ -421,9 +421,9 @@ def eval():
 
             i+=1
             if (i%100 == 0):
-                print("100 steps", data.qpos[2])
-                print("pitch:", pitch)
-                print ("roll:", roll)
+                print(i, "steps", data.qpos[2])
+                #print("pitch:", pitch)
+                #print ("roll:", roll)
             #print("step")
             viewer.sync()
 

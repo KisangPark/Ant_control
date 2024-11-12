@@ -62,11 +62,13 @@ class ANTENV():
         dist = 0
 
         torso_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "torso")
+        torso_pos = self.data.xpos[torso_id][0:2]
+        #global_position = self.data.xpos[torso_id][0:1]
 
         #global_position = self.data.xpos[torso_id][0:1]
         #0,1,2 index for global x,y,z position
 
-        dist = calc_distance(self.data.qpos[0:2], target_position) #global_position
+        dist = calc_distance(torso_pos, target_position) #self.data.qpos[0:2]
 
         if self.is_healthy() == 0:
             done_mask = 1
@@ -158,7 +160,7 @@ class ANTENV():
         if self.is_moving():
             reward += 1 #2 in goal 10
         else:
-            reward -= 1
+            reward -= 10
 
         #if self.is_healthy():
         #    reward += 1
