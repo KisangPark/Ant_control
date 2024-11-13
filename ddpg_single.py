@@ -52,8 +52,9 @@ data = mujoco.MjData(model)
 
 highest_speed = 5000 # maximum steps
 
-work_dir = "/home/kisang-park/Ant_control/result_files"
-
+work_dir = "C:/Users/gpu/kisang/Ant_control/result_files" 
+#/home/kisang-park/Ant_control/result_files
+#C:\Users\gpu\kisang\Ant_control\result_files
 
 
 def get_today():
@@ -62,14 +63,14 @@ def get_today():
     return s
 
 
-def plot(reward, dist, episode, flag):
-    if episode%5 == 0:
+def plot(reward, dist, timestep, flag):
+    if timestep%10 == 0:
 
         plt.figure(2)
         plt.cla() #delete all
         #durations_t = torch.tensor(laptimes, dtype=torch.float) #torch float tensor for duration
         plt.title('Result plot')
-        plt.xlabel('Episode')
+        plt.xlabel('timestep / 10')
         plt.ylabel('Total Reward')
         plt.plot(reward) # torch tensor to numpy
         plt.plot(dist)
@@ -188,6 +189,8 @@ class DDPGAgent:
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=learning_rate)
 
         self.replay_buffer = ReplayBuffer(buffer_size)
+
+        self.highest_speed = 5000
         #self.max_action = max_action
 
     def action(self, state):
@@ -239,15 +242,18 @@ class DDPGAgent:
 
 
     def return_net(self, num): #returning network parameters
+
+        if num > self.highest_speed:
+            return
         
         today = get_today()
 
         torch.save(self.actor.state_dict(), work_dir + "/actor" + "_" + str(num) + "_" + str(today) + ".pt")
-        #torch.save(self.critic.state_dict(), work_dir + "/critic" + "_" + str(num) + "_" + str(today) + ".pt")
+        torch.save(self.critic.state_dict(), work_dir + "/critic" + "_" + str(num) + "_" + str(today) + ".pt")
         
-        highest_speed = num
+        self.highest_speed = num
 
-        print("success case returned, highest_speed:", highest_speed)
+        print("********success case returned, highest_speed:", self.highest_speed, "********")
 
     def load_parameters(self, actor_path):
 
@@ -400,7 +406,7 @@ class eval_net(nn.Module):
 
 def eval():
 
-    actor_path = os.path.join(work_dir, "actor_1416_2024-11-13_03-58-20.pt")
+    actor_path = os.path.join(work_dir, "actor_929_2024-11-13_14-14-56.pt")
     #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0

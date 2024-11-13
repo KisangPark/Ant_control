@@ -205,13 +205,10 @@ class ANTENV():
         min_angle = -1
 
         if pitch>max_angle or pitch<min_angle:
-            print("**should be terminalized but no**")
             return 0
         if roll>max_angle or roll<min_angle:
-            print("**should be terminalized but no**")
             return 0
         if z_pos < 0.4 or z_pos>1:
-            print("**should be terminalized but no**")
             return 0
         
         return 1
