@@ -52,7 +52,7 @@ data = mujoco.MjData(model)
 
 highest_speed = 5000 # maximum steps
 
-work_dir = "/home/kisang-park/Ant_control/result_files" 
+work_dir = "C:/Users/gpu/kisang/Ant_control/result_files" 
 #/home/kisang-park/Ant_control/result_files
 #C:/Users/gpu/kisang/Ant_control/result_files
 
@@ -340,13 +340,13 @@ def main():
             rewards_forplot.append(plot_reward)
             final_dist = env.return_dist()
             dist_forplot.append(final_dist)
-            plot(rewards_forplot, dist_forplot, timestep, 0)
+            plot(rewards_forplot, dist_forplot, timestep, 0) #plot(reward, dist, timestep, flag)
 
                 #for num in range(num_epochs):
             #if timestep%10 == 0:
             agent.train()
         
-        plot(rewards_forplot,dist_forplot, 1, 1)
+        plot(rewards_forplot,dist_forplot, timestep, 1)
         #total_reward = total_reward/timestep *0.001
         #print(episode, "Episode executed, total reward:", total_reward)
 
@@ -367,7 +367,7 @@ def main():
         if success == 1:
             num = env.return_self_action_num()
             agent.return_net(num)
-            plot(rewards_forplot,dist_forplot, 1, 1)
+            plot(rewards_forplot,dist_forplot, timestep, 1)
 
 
         #train loop for epochs
