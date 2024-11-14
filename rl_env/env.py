@@ -149,7 +149,7 @@ class ANTENV():
         old_dist = self.dist
         self.dist = calc_distance(self.data.qpos[0:2], target_position)
 
-        if old_dist > self.dist:
+        if old_dist > self.dist: #velocity
             reward = (6 - self.dist)*2 #for gradient, better learning, added gradient
             #reward = np.exp((10 - dist)/2) # 15
             #starting from 0.9, end almost at 13~14
@@ -164,6 +164,12 @@ class ANTENV():
 
         #if self.is_healthy():
         #    reward += 1
+
+        #joint moving reward
+        if np.all(self.data.qvel != 0):
+            reward += 1
+        else:
+            reward -=1
 
         if done_mask and not success:
             reward = 0

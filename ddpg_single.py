@@ -52,9 +52,9 @@ data = mujoco.MjData(model)
 
 highest_speed = 5000 # maximum steps
 
-work_dir = "C:/Users/gpu/kisang/Ant_control/result_files" 
+work_dir = "/home/kisang-park/Ant_control/result_files" 
 #/home/kisang-park/Ant_control/result_files
-#C:\Users\gpu\kisang\Ant_control\result_files
+#C:/Users/gpu/kisang/Ant_control/result_files
 
 
 def get_today():
@@ -77,7 +77,8 @@ def plot(reward, dist, timestep, flag):
         plt.pause(0.01)
 
     if flag==1:
-        plt.savefig('result_plot.png')
+        save_path = os.path.join(work_dir + "/result_plot_" + str(timestep) + ".png")
+        plt.savefig(save_path)
 
 """pre code"""
 
@@ -255,11 +256,14 @@ class DDPGAgent:
 
         print("********success case returned, highest_speed:", self.highest_speed, "********")
 
-    def load_parameters(self, actor_path):
+    def load_parameters(self):
 
         #need to return critic also
-        self.actor.load_state_dict(torch.load(actor_path, weights_only = True))
-        self.actor_target.load_state_dict(torch.load(actor_path, weights_only = True))
+        self.actor.load_state_dict(torch.load(work_dir + "/success!!/" + "actor_587_2024-11-13_19-43-18.pt", weights_only = True))
+        self.actor_target.load_state_dict(torch.load(work_dir + "/success!!/" + "actor_587_2024-11-13_19-43-18.pt", weights_only = True))
+
+        self.critic.load_state_dict(torch.load(work_dir + "/success!!/" + "critic_587_2024-11-13_19-43-18.pt", weights_only = True))
+        self.critic_target.load_state_dict(torch.load(work_dir + "/success!!/" + "critic_587_2024-11-13_19-43-18.pt", weights_only = True))
 
 
 def main():
@@ -271,16 +275,17 @@ def main():
 
     #define PPO agent
     agent = DDPGAgent(state_dim, action_dim)
-
-    #for plot
-    rewards_forplot = []
-    dist_forplot = []
+    agent.load_parameters()
 
     #standard deviation
     std_dev = 0.1
 
     #episode loop
     for episode in range(num_episodes):
+
+        #for plot
+        rewards_forplot = []
+        dist_forplot = []
         
         #pre-execution
         states, actions, rewards, next_states, dones = [], [], [], [], []
@@ -332,10 +337,10 @@ def main():
             plot_reward = total_reward/timestep
             if timestep%100 == 0:
                 print(timestep, "steped, total reward:", plot_reward)
-                rewards_forplot.append(plot_reward)
-                final_dist = env.return_dist()
-                dist_forplot.append(final_dist)
-                plot(rewards_forplot, dist_forplot, timestep, 0)
+            rewards_forplot.append(plot_reward)
+            final_dist = env.return_dist()
+            dist_forplot.append(final_dist)
+            plot(rewards_forplot, dist_forplot, timestep, 0)
 
                 #for num in range(num_epochs):
             #if timestep%10 == 0:
@@ -406,7 +411,7 @@ class eval_net(nn.Module):
 
 def eval():
 
-    actor_path = os.path.join(work_dir, "actor_929_2024-11-13_14-14-56.pt")
+    actor_path = os.path.join(work_dir, "actor_940_2024-11-14_12-28-36.pt")
     #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0
@@ -447,6 +452,6 @@ def eval():
 
 
 if __name__ == '__main__':
-    #main()
+    main()
 
-    eval()
+    #eval()
