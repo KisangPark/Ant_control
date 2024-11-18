@@ -9,6 +9,12 @@ difference
     2) train function: direct learning in critic, 4 times iteration in actor
 
 *** Consider CTDE case... Too many networks
+
+
+
+
+**for divide state
+all dividing state executed inside agent... thus no dividing in main code
 """
 
 import os
@@ -33,7 +39,7 @@ from IPython import display
 plt.ion()
 os.environ["PYOPENGL_PLATFORM"] = 'egl'
 
-import rl_env.env
+import rl_env.contact_env
 from rl_env.OUNoise import OUNoise
 
 
@@ -46,12 +52,12 @@ batch_size = 32 #64
 buffer_size = 30000
 num_epochs = 2
 
-state_dim = 29 # plus goal, contact force
+state_dim = 49 # plus goal, contact force
+actor_state_dim = 25
 action_dim = 8
 
-model = mujoco.MjModel.from_xml_path('ant_with_goal.xml') #xml file changed
+model = mujoco.MjModel.from_xml_path('ant_box.xml') #xml file changed
 data = mujoco.MjData(model)
-#state_dim = len(data.qpos) + len(data.qvel)
 
 highest_speed = 5000 # maximum steps
 
@@ -83,11 +89,29 @@ def plot(reward, dist, episode, flag):
 
 
 def divide_state(state):
-    # common knowledge & specific index definition
+    """
+    receiving state: qpos, qvel, qacc, force, box_pos
+    qpos: 7 for torso, 8 for each joints
+    qvel & qacc: 6 for torso, 8 for each joints
+    force: common
+    box_pos: common
+    """
+    state_list = []
+    for qpos, qvel, qacc, force, box_pos in state:
+        common_state = np.concatenate([qpos[0:7], qvel[0:6], qacc[0:6], force, box_pos])
+    
+    start = 6
+    finish = 8
+    for i in range(4):
+        temp_state = np.concatenate([common_state, qpos[start+1:finish+1], qvel[start:finish], qacc[start:finish]])
+        state_list.append(temp_state)
+        start += 2
+        finish += 2
 
-    #make array
+    return state_list
+    #list of four lists
 
-    #make total array, return
+
 
 """pre code"""
 
@@ -101,9 +125,9 @@ buffer: add, sample, size
 """
 
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, actor_state_dim, action_dim):
         super(Actor, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 256)
+        self.fc1 = nn.Linear(actor_state_dim, 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, action_dim)
 
@@ -138,8 +162,7 @@ class ReplayBuffer:
     def sample(self, batch_size):
         batch = random.sample(self.buffer, batch_size) 
         states, actions, next_states, rewards, dones = zip(*batch)
-        #print ("thisthils", len(states), len(next_states))
-        #print(states)
+
         return (
             torch.FloatTensor(states),
             torch.FloatTensor(actions),
@@ -211,17 +234,22 @@ class MACCagent:
         #buffer
         self.Qbuffer = ReplayBuffer(buffer_size)
 
-    def action (self, arr_state): #input state: 4 array actor state
-        #arr_state: [np.array(actor_state), ... , np.array(actor_state)]
-        #tuple? iterable 
+
+    def action (self, in_state): #multiple actors!!
 
         output = []
-        
-        for state in arr_state:
-            state = torch.FloatTensor(state)
-            out = self.actor(state).detach().numpy() #out: np array of action
-            output.append(state)
+
+        arr_state = divide_state(in_state)
+        i=0
+
+        for actor in (self.actor1, self.actor2, self.actor3, self.actor4):
+            state = torch.FloatTensor(arr_state[i])
+            out = actor(state).detach().numpy()
+            output.append(out)
+            i+=1
         return output.flatten()
+        
+
 
     def train (self):
         if self.Qbuffer.size() < batch_size:
@@ -229,8 +257,7 @@ class MACCagent:
             return
 
         #critic training
-        states, actions, next_states, rewards, dones = self.Qbuffer.sample(batch_size)
-        #different buffer -> problem in fetching -> one buffer, when acting get array
+        states, actions, next_states, rewards, dones = self.Qbuffer.sample(batch_size) #buffer have 1d state
         arr_states = divide_state(states)
         arr_next_states = divide_state(next_states)
 
@@ -240,17 +267,12 @@ class MACCagent:
             next_actions = []
 
             for target_network in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
-                next_action = target_network(arr_next_states[i])
+                next_action = target_network(arr_next_states[i]) #next_action = size 2
                 next_actions.append(next_action)
                 i+=1
-            #next_action1 = self.actor1_target(arr_next_states[0])
-            #next_action2 = self.actor2_target(arr_next_states[1])
-            #next_action3 = self.actor3_target(arr_next_states[2])
-            #next_action4 = self.actor4_target(arr_next_states[3])
-            next_actions = torch.cat(next_actions, dim=1)
-            #print("sizes:", states.size(), next_states.size(), next_actions.size())
-            
-            target_q = rewards + (1 - dones) * gamma * self.critic_target(next_states, next_actions)
+
+            next_actions = torch.cat(next_actions, dim=1) #size 8            
+            target_q = rewards + (1 - dones) * gamma * self.critic_target(next_states, next_actions) #next_states = length 49
         
         current_q = self.critic(states, actions)
         critic_loss = nn.MSELoss()(current_q, target_q)
@@ -263,13 +285,9 @@ class MACCagent:
         actions = []
         j=0
         for actor in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
-            action = actor(arr_states[i])
+            action = actor(arr_states[j])
             actions.append(action)
             j+=1
-        #action1 = self.actor1_target(arr_states[0])
-        #action2 = self.actor2_target(arr_states[1])
-        #action3 = self.actor3_target(arr_states[2])
-        #action4 = self.actor4_target(arr_states[3])
 
         actor_actions = torch.cat(actions, dim=1)
         actor_loss = -self.critic(states, actor_actions).mean()
@@ -278,24 +296,8 @@ class MACCagent:
             optimizer.zero_Grad()
             actor_loss.backward()
             optimizer.step()
-        """
-        self.actor1_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor1_optimizer.step()
 
-        self.actor2_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor2_optimizer.step()
-
-        self.actor3_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor3_optimizer.step()
-
-        self.actor4_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor4_optimizer.step()
-        """
-
+        #target update
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
             target_param.data.copy_(TAU * param.data + (1 - TAU) * target_param.data)
 
@@ -317,7 +319,7 @@ class MACCagent:
 
         i = 1
         for actor in (self.actor1, self.actor2, self.actor3, self.actor4):
-            torch.save(actor.state_dict(), work_dir + "/actor" + i + "_" + str(num)+str(today)+"/pt")
+            torch.save(actor.state_dict(), work_dir + "/actor" + i + "_" + str(num)+str(today)+".pt")
             i+=1
         highest_speed = num
 
@@ -333,7 +335,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #load environment
-    env = rl_env.env.ANTENV()
+    env = rl_env.contact_env.CONTACT_ENV()
 
     #define PPO agent
     agent = MACCagent(state_dim, actor_state_dim, action_dim)
@@ -342,8 +344,6 @@ def main():
     rewards_forplot = []
     dist_forplot = []
 
-    #standard deviation
-    std_dev = 0.1
 
     #episode loop
     for episode in range(num_episodes):
@@ -364,17 +364,12 @@ def main():
         action = np.array(action)
         next_state = np.array(next_state)
 
-        arr_state = divide_state(state)
-        arr_next_state = divide_state(next_state)
-        #reward = np.array(reward)
-        #done_mask = np.array(done_mask)
-        #print("env0:", state.shape, next_state.shape, reward.shape)
 
 
         """execute one episode"""
         while done_mask == 0:
             
-            action = agent.action(arr_state)
+            action = agent.action(state)
             noise = OUNoise(action_dim).noise()
             action += noise #noisy action returned
             
