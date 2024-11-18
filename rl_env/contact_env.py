@@ -86,7 +86,7 @@ class CONTACT_ENV():
         try:
             self.xml_path = kwargs['xml_path']
         except:
-            self.xml_path = "ant_box.xml"
+            self.xml_path = "/home/kisang-park/Ant_control/rl_env/ant_box.xml"
 
         #initialize model, starting condition
         self.model = mujoco.MjModel.from_xml_path(self.xml_path)
@@ -104,7 +104,21 @@ class CONTACT_ENV():
         self.box_pos = []
 
         #total state
-        self.state = []
+        self.state = [np.array([-1.28745179e-18 , 4.00000000e+00 , 6.37708673e-01 , 1.00000000e+00,
+  2.34819987e-18,  0.00000000e+00,  0.00000000e+00 , 2.14378271e-20,
+ -4.28563624e-20 , 7.59658514e-01 , 1.00000000e+00,  1.04681436e-18,
+  0.00000000e+00,  0.00000000e+00,  4.19109008e-21,  1.38842213e-01,
+  2.76536143e-22, -1.38842213e-01 ,-2.82606611e-21, -1.38842213e-01,
+ -1.26737467e-21 , 1.38842213e-01]), np.array([-1.16641870e-16 ,-1.99841913e-16 , 9.46836559e+00  ,2.81053677e-16,
+ -1.57771747e-16,  3.32167444e-19,  1.39433741e-18, -3.00047259e-18,
+  6.05208933e-01, -8.20163556e-17 ,-3.69768675e-17,  2.29349934e-19,
+  5.13551618e-19,  9.63761834e+00, -1.61808905e-20, -9.63761834e+00,
+ -3.89748384e-19 ,-9.63761834e+00, -9.09256629e-20,  9.63761834e+00]) ,np.array([ 3.80944285e-18  ,4.14547122e-18, -9.81459055e+00, -8.74321637e-18,
+  7.53717729e-18 ,-1.24139885e-20,  1.84038748e-18,  1.53754252e-18,
+ -1.17887078e+01, -3.37525547e-18, -1.93947247e-18, -4.43743143e-23,
+  5.47754564e-17, -1.01089942e+01, -5.50734590e-17,  1.01089942e+01,
+ -5.47972522e-17 , 1.01089942e+01,  5.50955464e-17, -1.01089942e+01]), np.array([0, 0, 0])]
+
         self.dist = 8 #initial distance
         self.inter_dist = 4
 
@@ -185,7 +199,7 @@ class CONTACT_ENV():
     in MACC divide_state, get each & index
     """
 
-    def calc_reward(self):
+    def calc_reward(self, done_mask, success):
         """
         reward function
 
@@ -227,9 +241,9 @@ class CONTACT_ENV():
         #4. inter-distance
         reward += np.min([2-self.inter_dist, 1])
 
-        #5. contact advantage
-        if ncon !=0:
-            reward += 1        
+        #5. contact advantage -> nope... bottom contact number always exists
+        #if self.data.ncon !=0:
+        #    reward += 1        
 
         #6. done case
         if done_mask and not success:
@@ -260,6 +274,14 @@ class CONTACT_ENV():
         mujoco.mj_step(self.model, self.data)
         self.action_num += 1
 
+        #print("qacc:", len(self.data.qacc))
+        #print("qpos & qvel:", len(self.data.qpos)+len(self.data.qvel)) # -> box pos & velocity returned together!!!!!!! wow...
+        #print("qpos:", self.data.qpos, self.data.qvel, self.data.qacc)
+        #print("torso pos:", self.data.xpos[self.torso_id][0:3])
+        #print("box pos:", self.data.xpos[self.box_id][0:3])
+        #front 7 qpos & front 6 qvel & front 6 qacc is for box!!
+        #print("contact:", self.data.contact)
+
         #get contact force
         if self.data.ncon == 0:
             pass
@@ -267,21 +289,21 @@ class CONTACT_ENV():
             for j, c in enumerate(self.data.contact):
                 mujoco.mj_contactForce(self.model, self.data, j, forcetorque)
                 force += forcetorque[0:3] #now, force is sum
-                print(force)
+                #print("force:", force)
 
         #equalize values
         qvel_equalized = self.data.qvel * 10
         qpos_equalized = self.data.qpos *10
         qacc_equalized = self.data.qacc *10
-        box_pos_eqalized = self.data.xpos[self.box_id][0:2] *10
+        #box_pos_eqalized = self.data.xpos[self.box_id][0:2] *10
 
 
         #next_state get
-        self.state =[qpos_equalized, qvel_equalized, qacc_equalized, force, box_pos_eqalized] #box position always x & y
+        self.state =[qpos_equalized, qvel_equalized, qacc_equalized, force] #box position always x & y
         done_mask, success = self.check_done()
 
         #reward calculation
-        reward = self.calc_reward()
+        reward = self.calc_reward(done_mask, success)
 
         return current_state, action, self.state, reward, done_mask, success
 
@@ -322,8 +344,8 @@ class CONTACT_ENV():
         min_angle = -1
 
         #reward: if pitch & roll near 0, plus reward / maximum max or min angle
-        pitch_reward = np.argmin(abs(max_angle - pitch),abs(min_angle - pitch))
-        roll_reward = np.argmin(abs(max_angle - roll), abs(min_angle - roll))
+        pitch_reward = np.min([abs(max_angle - pitch),abs(min_angle - pitch)])
+        roll_reward = np.min([abs(max_angle - roll), abs(min_angle - roll)])
         reward = (pitch_reward+roll_reward)/2
 
         if pitch>max_angle or pitch<min_angle:
@@ -359,9 +381,6 @@ class CONTACT_ENV():
         else:
             return 1
 
-
-    def is_contact(self):# for contact 
-        self.data.ncon
 
     def return_self_action_num(self):
         return self.action_num

@@ -46,13 +46,13 @@ num_epochs = 2
 state_dim = 29
 action_dim = 8
 
-model = mujoco.MjModel.from_xml_path('ant_with_goal.xml') #xml file changed
+model = mujoco.MjModel.from_xml_path('/home/kisang-park/Ant_control/rl_env/ant_with_goal.xml') #xml file changed
 data = mujoco.MjData(model)
 #state_dim = len(data.qpos) + len(data.qvel)
 
 highest_speed = 5000 # maximum steps
 
-work_dir = "C:/Users/gpu/kisang/Ant_control/result_files" 
+work_dir = "/home/kisang-park/Ant_control/result_files" 
 #/home/kisang-park/Ant_control/result_files
 #C:/Users/gpu/kisang/Ant_control/result_files
 
@@ -411,7 +411,7 @@ class eval_net(nn.Module):
 
 def eval():
 
-    actor_path = os.path.join(work_dir, "actor_940_2024-11-14_12-28-36.pt")
+    actor_path = os.path.join(work_dir, "actor_448_2024-11-14_20-22-27.pt")
     #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0
@@ -452,6 +452,6 @@ def eval():
 
 
 if __name__ == '__main__':
-    main()
+    #main()
 
-    #eval()
+    eval()

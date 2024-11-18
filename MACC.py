@@ -52,11 +52,11 @@ batch_size = 32 #64
 buffer_size = 30000
 num_epochs = 2
 
-state_dim = 49 # plus goal, contact force
-actor_state_dim = 25
-action_dim = 8
+state_dim = 65 # plus goal, contact force
+actor_state_dim = 47
+action_dim = 8 #each agent
 
-model = mujoco.MjModel.from_xml_path('ant_box.xml') #xml file changed
+model = mujoco.MjModel.from_xml_path('/home/kisang-park/Ant_control/rl_env/ant_box.xml') #xml file changed
 data = mujoco.MjData(model)
 
 highest_speed = 5000 # maximum steps
@@ -95,10 +95,19 @@ def divide_state(state):
     qvel & qacc: 6 for torso, 8 for each joints
     force: common
     box_pos: common
+
+    qpos: former 7 values for box position
+    qvel & qacc: former 6 values for box 
+
+    thus, common knowledge of qpos: from index 0~13, qvel&qacc: 0~11
+
+    common state length: 14+12+12+3 = 41
+    actor length: 47
+    total length: 22+20+20+3 = 65
     """
     state_list = []
-    for qpos, qvel, qacc, force, box_pos in state:
-        common_state = np.concatenate([qpos[0:7], qvel[0:6], qacc[0:6], force, box_pos])
+    qpos, qvel, qacc, force = state
+    common_state = np.concatenate([qpos[0:14], qvel[0:12], qacc[0:12], force]) #common knowledge, length 41
     
     start = 6
     finish = 8
@@ -129,7 +138,7 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(actor_state_dim, 256)
         self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, action_dim)
+        self.fc3 = nn.Linear(256, 2) #not able to use action dim
 
     def forward(self, x):
         x = F.tanh(self.fc1(x)) #relu
@@ -164,12 +173,12 @@ class ReplayBuffer:
         states, actions, next_states, rewards, dones = zip(*batch)
 
         return (
-            torch.FloatTensor(states),
+            states,
             torch.FloatTensor(actions),
-            torch.FloatTensor(next_states),
+            next_states,
             torch.FloatTensor(rewards).unsqueeze(1),
             torch.FloatTensor(dones).unsqueeze(1)#,
-            )#returns 
+            ) #states not tensor because array
 
     def size(self):
         return len(self.buffer)
@@ -212,22 +221,22 @@ class MACCagent:
 
         #actor part - 4 actors
         self.actor1 = Actor(actor_state_dim, action_dim)#.to(device)
-        self.actor1_target = Actor(actor_dim, action_dim)#.to(device)
+        self.actor1_target = Actor(actor_state_dim, action_dim)#.to(device)
         self.actor1_target.load_state_dict(self.actor1.state_dict())
         self.actor1_optimizer = optim.Adam(self.actor1.parameters(), lr=learning_rate)
 
         self.actor2 = Actor(actor_state_dim, action_dim)#.to(device)
-        self.actor2_target = Actor(actor_dim, action_dim)#.to(device)
+        self.actor2_target = Actor(actor_state_dim, action_dim)#.to(device)
         self.actor2_target.load_state_dict(self.actor2.state_dict())
         self.actor2_optimizer = optim.Adam(self.actor2.parameters(), lr=learning_rate)
 
         self.actor3 = Actor(actor_state_dim, action_dim)#.to(device)
-        self.actor3_target = Actor(actor_dim, action_dim)#.to(device)
+        self.actor3_target = Actor(actor_state_dim, action_dim)#.to(device)
         self.actor3_target.load_state_dict(self.actor3.state_dict())
         self.actor3_optimizer = optim.Adam(self.actor3.parameters(), lr=learning_rate)
 
         self.actor4 = Actor(actor_state_dim, action_dim)#.to(device)
-        self.actor4_target = Actor(actor_dim, action_dim)#.to(device)
+        self.actor4_target = Actor(actor_state_dim, action_dim)#.to(device)
         self.actor4_target.load_state_dict(self.actor4.state_dict())
         self.actor4_optimizer = optim.Adam(self.actor4.parameters(), lr=learning_rate)
 
@@ -247,10 +256,14 @@ class MACCagent:
             out = actor(state).detach().numpy()
             output.append(out)
             i+=1
-        return output.flatten()
+        return np.concatenate(output)#output.flatten()
         
 
-
+    """
+    problem in train
+    -> short not visible, to big to get
+    -> deque problem
+    """
     def train (self):
         if self.Qbuffer.size() < batch_size:
             print("short")
@@ -267,7 +280,9 @@ class MACCagent:
             next_actions = []
 
             for target_network in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
-                next_action = target_network(arr_next_states[i]) #next_action = size 2
+
+                #torch tensor right here
+                next_action = target_network(torch.FloatTensor(arr_next_states[i])) #next_action = size 2
                 next_actions.append(next_action)
                 i+=1
 
@@ -353,30 +368,28 @@ def main():
         total_reward = 0
         success = 0
         timestep =0
-
-        #Noise distrbution, preventing deadlock
-        #distribution = Normal(0, std_dev)
         
         #initialize environment
         env.reset()
         state, action, next_state, reward, done_mask, success = env.step(np.zeros(action_dim))
-        state = np.array(state)
         action = np.array(action)
-        next_state = np.array(next_state)
+        #state
+        #next_state = np.array(next_state) #need to use tuple? state shape inhomogeneous
 
 
 
         """execute one episode"""
         while done_mask == 0:
             
-            action = agent.action(state)
+            action = agent.action(state) #here, state = 0x1 problem occurred
             noise = OUNoise(action_dim).noise()
+            #print("action & noise:", len(action), len(noise))
             action += noise #noisy action returned
             
             state, action, next_state, reward, done_mask, success = env.step(action) #env returns: np ndarray
-            state = np.array(state)
+            #state = np.array(state)
             action = np.array(action)
-            next_state = np.array(next_state)
+            #next_state = np.array(next_state)
             agent.Qbuffer.add(state, action, next_state,reward, done_mask)
             #noticed! -> can access to self variables using dot methods
             
@@ -411,7 +424,7 @@ def main():
 
 """evaluation net"""
 
-class eval_net():
+"""class eval_net():
     def __init__():
         super().__init__()
 
@@ -448,7 +461,7 @@ def eval():
             viewer.sync()
 
             viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
-
+"""
 
 
 
