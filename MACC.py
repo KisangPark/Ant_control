@@ -358,7 +358,7 @@ def main():
     #for plot
     rewards_forplot = []
     dist_forplot = []
-
+    
 
     #episode loop
     for episode in range(num_episodes):
