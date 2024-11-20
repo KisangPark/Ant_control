@@ -121,6 +121,22 @@ def divide_state(state):
     #list of four lists
 
 
+def get_cube(states, batch_size):
+    cube, state1, state2, state3, state4 = [],[],[],[], []
+
+    for j in range(batch_size):
+        four_state = divide_state(states[j])
+
+        i = 0
+        for state_num in (state1, state2, state3, state4):
+            state_num.append(four_state[i])
+            i += 1
+    
+    for state_num in (state1, state2, state3, state4):
+        cube.append(state_num)
+    
+    return cube
+
 
 """pre code"""
 
@@ -271,22 +287,35 @@ class MACCagent:
 
         #critic training
         states, actions, next_states, rewards, dones = self.Qbuffer.sample(batch_size) #buffer have 1d state
-        arr_states = divide_state(states)
-        arr_next_states = divide_state(next_states)
+
+        #make states to batch cube states
+        cube = get_cube(states, batch_size)
+        next_cube = get_cube(next_states, batch_size)
+        #print("test:", cube[0]) #success
+
+        #now, states is cubic -> forwarding for each agent with no gradient
+        #next_cube = array, thus first index represents depthwise
 
         with torch.no_grad():
-            #make iterable..?
+
             i=0
             next_actions = []
 
             for target_network in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
-
                 #torch tensor right here
-                next_action = target_network(torch.FloatTensor(arr_next_states[i])) #next_action = size 2
+                next_action = target_network(torch.FloatTensor(next_cube[i])) #cutting state row-wise
                 next_actions.append(next_action)
                 i+=1
+            #print("next:", next_actions)
+            next_actions = torch.cat(next_actions, dim=1).unsqueeze(dim=1)  #-> problem occurs in critic network
+            #next_actions = np.concatenate(next_actions, axis = 1)
+            #print("passed, next_action:", next_actions)  
 
-            next_actions = torch.cat(next_actions, dim=1) #size 8            
+            #now, make total state for critic 
+            next_states = np.hstack(next_states).ravel().tolist()   
+            print("next states:", next_states)
+            next_states = torch.FloatTensor(next_states).unsqueeze(dim=1)
+            print("next_states:", next_states)
             target_q = rewards + (1 - dones) * gamma * self.critic_target(next_states, next_actions) #next_states = length 49
         
         current_q = self.critic(states, actions)
