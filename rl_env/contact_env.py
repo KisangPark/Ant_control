@@ -86,7 +86,7 @@ class CONTACT_ENV():
         try:
             self.xml_path = kwargs['xml_path']
         except:
-            self.xml_path = "/home/kisang-park/Ant_control/rl_env/ant_box.xml"
+            self.xml_path = "C:/Users/gpu/kisang/Ant_control/rl_env/ant_box.xml"
 
         #initialize model, starting condition
         self.model = mujoco.MjModel.from_xml_path(self.xml_path)

@@ -56,12 +56,13 @@ state_dim = 65 # plus goal, contact force
 actor_state_dim = 47
 action_dim = 8 #each agent
 
-model = mujoco.MjModel.from_xml_path('/home/kisang-park/Ant_control/rl_env/ant_box.xml') #xml file changed
+model = mujoco.MjModel.from_xml_path('C:/Users/gpu/kisang/Ant_control/rl_env/ant_box.xml') #xml file changed
 data = mujoco.MjData(model)
 
 highest_speed = 5000 # maximum steps
 
 work_dir = "/home/kisang-park/Ant_control/result_macc"
+#C:/Users/gpu/kisang/Ant_control/rl_env
 
 
 
@@ -86,6 +87,23 @@ def plot(reward, dist, episode, flag):
 
     if flag==1:
         plt.savefig('result_plot.png')
+
+
+def flat_vectorize(state, batch_size):
+    flattened = []
+    for i in range(batch_size):
+        temp = []
+        qpos, qvel, qacc, force = state[i]
+        
+        for q in (qpos, qvel, qacc, force):
+            for item in q:
+                temp.append(item)
+
+        flattened.append(temp)
+        print("flattened, temp:", len(flattened), len(temp))
+
+    flattened = torch.FloatTensor(flattened)
+    return flattened
 
 
 def divide_state(state):
@@ -303,19 +321,17 @@ class MACCagent:
 
             for target_network in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
                 #torch tensor right here
-                next_action = target_network(torch.FloatTensor(next_cube[i])) #cutting state row-wise
+                next_action = target_network(torch.FloatTensor(next_cube[i])).unsqueeze() #cutting state row-wise
                 next_actions.append(next_action)
                 i+=1
             #print("next:", next_actions)
-            next_actions = torch.cat(next_actions, dim=1).unsqueeze(dim=1)  #-> problem occurs in critic network
+            next_actions = torch.cat(next_actions, dim=1)#.unsqueeze(dim=1)  -> problem occurs in critic network
             #next_actions = np.concatenate(next_actions, axis = 1)
             #print("passed, next_action:", next_actions)  
 
             #now, make total state for critic 
-            next_states = np.hstack(next_states).ravel().tolist()   
-            print("next states:", next_states)
-            next_states = torch.FloatTensor(next_states).unsqueeze(dim=1)
-            print("next_states:", next_states)
+            next_states = flat_vectorize(next_states, batch_size) 
+            #next_states = torch.FloatTensor(next_states)#.unsqueeze(dim=1)
             target_q = rewards + (1 - dones) * gamma * self.critic_target(next_states, next_actions) #next_states = length 49
         
         current_q = self.critic(states, actions)
