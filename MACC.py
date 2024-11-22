@@ -45,7 +45,7 @@ from rl_env.OUNoise import OUNoise
 
 # Hyperparameters
 num_episodes = 1000
-learning_rate = 0.0001
+learning_rate = 0.001 #0.0001
 gamma = 0.99
 TAU = 0.1
 batch_size = 32 #64
@@ -177,7 +177,8 @@ class Actor(nn.Module):
     def forward(self, x):
         x = F.tanh(self.fc1(x)) #relu
         x = F.tanh(self.fc2(x))
-        return F.tanh(self.fc3(x))
+        x = F.tanh(self.fc3(x))
+        return x/2
 
 
 class Critic(nn.Module):
@@ -277,20 +278,20 @@ class MACCagent:
         #buffer
         self.Qbuffer = ReplayBuffer(buffer_size)
 
+        self.highest_speed = 5000
+
 
     def action (self, in_state): #multiple actors!!
 
         output = []
 
         arr_state = divide_state(in_state)
-        i=0
 
-        for actor in (self.actor1, self.actor2, self.actor3, self.actor4):
+        for i, actor in enumerate([self.actor1, self.actor2, self.actor3, self.actor4]):
             state = torch.FloatTensor(arr_state[i])
             out = actor(state).detach().numpy()
             output.append(out)
-            i+=1
-        return np.concatenate(output)#output.flatten()
+        return np.concatenate(output)#numpy output
         
 
     """
@@ -309,39 +310,27 @@ class MACCagent:
         #make states to batch cube states
         cube = get_cube(states, batch_size)
         next_cube = get_cube(next_states, batch_size)
-        #print("test:", cube[0]) #success
 
         #now, states is cubic -> forwarding for each agent with no gradient
         #next_cube = array, thus first index represents depthwise
 
         with torch.no_grad():
 
-            i=0
-            #next_actions = []
-
-            for target_network in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
+            for i, target_network in enumerate([self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target]):
                 #torch tensor right here
                 next_action = target_network(torch.FloatTensor(next_cube[i])) #cutting state row-wise
-                #print("next_action:", next_action.size())
+                #print("next_action:", next_action)
                 if i == 0:
                     next_actions = next_action
                 else:
                     next_actions = torch.cat([next_actions, next_action], dim=1)
-                i+=1
+
             #print("next:", next_actions.size())
             
-            #next_actions = torch.cat(next_actions, dim=1)#.unsqueeze(dim=1)  -> problem occurs in critic network
-            #next_actions = torch.FloatTensor(next_actions)
-            #print("next_action:", next_action.size())
-            #next_actions = np.concatenate(next_actions, axis = 1)
-            #print("passed, next_action:", next_actions)  
-
             #now, make total state for critic 
             next_stata = flat_vectorize(next_states, batch_size) 
-            #print("next_state:", next_stata.type(), next_stata.size())
-            #next_states = torch.FloatTensor(next_states)#.unsqueeze(dim=1)
             target_q = rewards + (1 - dones) * gamma * self.critic_target(next_stata, next_actions) #next_states = length 49
-        
+            #print("target Q:", target_q)
         #print("this:", states.size(), actions.size())
         stata = flat_vectorize(states, batch_size)
         actions = torch.FloatTensor(actions)
@@ -355,22 +344,24 @@ class MACCagent:
 
         #actor trainig
         actions = []
-        j=0
-        for actor in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
+        for j, actor in enumerate ([self.actor1, self.actor2, self.actor3, self.actor4]):
             action = actor(torch.FloatTensor(cube[j])) #arr_state
             
             actions.append(action)
-            j+=1
 
         actor_actions = torch.cat(actions, dim=1)
-        #print("actions:", actor_actions.size())
         actor_loss = -self.critic(stata, actor_actions).mean()
+        #print("actor loss:", actor_loss.item())
+
 
         for optimizer in (self.actor1_optimizer, self.actor2_optimizer, self.actor3_optimizer, self.actor4_optimizer):
             optimizer.zero_grad()
         actor_loss.backward()
         for optimizer in (self.actor1_optimizer, self.actor2_optimizer, self.actor3_optimizer, self.actor4_optimizer):
-            optimizer.step()
+            try:
+                optimizer.step()
+            except:
+                pass
 
         #target update
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
@@ -468,13 +459,17 @@ def main():
                 #for num in range(num_epochs):
                 agent.train()
         
-        plot(rewards_forplot,dist_forplot, 1, 1)
+        #plot(rewards_forplot,dist_forplot, 1, 1)
 
         #if success
         if success == 1:
             num = env.return_self_action_num()
             agent.return_net(num)
             plot(rewards_forplot,dist_forplot, 1, 1)
+            rewards_forplot, dist_forplot = [], []
+
+        if episode%100 == 0:
+            rewards_forplot, dist_forplot = [], []
 
     print ("all episodes executed")
     plot(rewards_forplot,dist_forplot, 1, 1)

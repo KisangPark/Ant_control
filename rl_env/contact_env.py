@@ -25,7 +25,7 @@ import time
 import mujoco
 
 #hyper parameters
-max_action_num = 10000
+max_action_num = 200000
 minimum_dist = 1
 target_position = [0, 8]
 
@@ -172,6 +172,11 @@ class CONTACT_ENV():
         elif box_dist < minimum_dist:
             done_mask = 1
             success = 1
+
+        #5. max action num
+        elif self.action_num > max_action_num:
+            done_mask = 1
+            success = 0
         
         else:
             done_mask = 0
@@ -223,14 +228,14 @@ class CONTACT_ENV():
         
         #1. box reward (default values... velocity and distance)
         if old_dist > self.dist: 
-            reward = (9 - self.dist)*2
+            reward = (9 - self.dist)*3
             #reward = np.exp((10 - dist)/2) # 15
         else:
-            reward = -2
+            reward = 0
 
         #2. Ant moving condition (global)
         if self.is_moving():
-            reward += 1
+            reward += 2
         else:
             reward -= 2 #10 or 16
         
@@ -239,11 +244,17 @@ class CONTACT_ENV():
             reward += self.is_healthy()
 
         #4. inter-distance
-        reward += np.min([2-self.inter_dist, 1])
+        reward += np.min([2-self.inter_dist, 1])*2
 
         #5. contact advantage -> nope... bottom contact number always exists
         #if self.data.ncon !=0:
-        #    reward += 1        
+        #    reward += 1    
+
+        #5. qvel
+        if np.any(self.data.qvel == 0):
+            reward -= 5
+        else:
+            reward += 1
 
         #6. done case
         if done_mask and not success:
@@ -376,7 +387,7 @@ class CONTACT_ENV():
         xyz_velocity = velocity[:3]
         absolute_velocity = calc_distance(np.zeros(3), xyz_velocity)
 
-        if absolute_velocity <0.1 or np.any(self.data.qvel == 0):
+        if absolute_velocity <0.1:
             return 0
         else:
             return 1
