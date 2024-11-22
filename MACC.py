@@ -47,7 +47,7 @@ from rl_env.OUNoise import OUNoise
 num_episodes = 1000
 learning_rate = 0.0001
 gamma = 0.99
-TAU = 0.005
+TAU = 0.1
 batch_size = 32 #64
 buffer_size = 30000
 num_epochs = 2
@@ -100,7 +100,7 @@ def flat_vectorize(state, batch_size):
                 temp.append(item)
 
         flattened.append(temp)
-        print("flattened, temp:", len(flattened), len(temp))
+        #print("flattened, temp:", len(flattened), len(temp))
 
     flattened = torch.FloatTensor(flattened)
     return flattened
@@ -317,44 +317,59 @@ class MACCagent:
         with torch.no_grad():
 
             i=0
-            next_actions = []
+            #next_actions = []
 
             for target_network in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
                 #torch tensor right here
-                next_action = target_network(torch.FloatTensor(next_cube[i])).unsqueeze() #cutting state row-wise
-                next_actions.append(next_action)
+                next_action = target_network(torch.FloatTensor(next_cube[i])) #cutting state row-wise
+                #print("next_action:", next_action.size())
+                if i == 0:
+                    next_actions = next_action
+                else:
+                    next_actions = torch.cat([next_actions, next_action], dim=1)
                 i+=1
-            #print("next:", next_actions)
-            next_actions = torch.cat(next_actions, dim=1)#.unsqueeze(dim=1)  -> problem occurs in critic network
+            #print("next:", next_actions.size())
+            
+            #next_actions = torch.cat(next_actions, dim=1)#.unsqueeze(dim=1)  -> problem occurs in critic network
+            #next_actions = torch.FloatTensor(next_actions)
+            #print("next_action:", next_action.size())
             #next_actions = np.concatenate(next_actions, axis = 1)
             #print("passed, next_action:", next_actions)  
 
             #now, make total state for critic 
-            next_states = flat_vectorize(next_states, batch_size) 
+            next_stata = flat_vectorize(next_states, batch_size) 
+            #print("next_state:", next_stata.type(), next_stata.size())
             #next_states = torch.FloatTensor(next_states)#.unsqueeze(dim=1)
-            target_q = rewards + (1 - dones) * gamma * self.critic_target(next_states, next_actions) #next_states = length 49
+            target_q = rewards + (1 - dones) * gamma * self.critic_target(next_stata, next_actions) #next_states = length 49
         
-        current_q = self.critic(states, actions)
+        #print("this:", states.size(), actions.size())
+        stata = flat_vectorize(states, batch_size)
+        actions = torch.FloatTensor(actions)
+        current_q = self.critic(stata, actions)
         critic_loss = nn.MSELoss()(current_q, target_q)
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
 
+
         #actor trainig
         actions = []
         j=0
         for actor in (self.actor1_target, self.actor2_target, self.actor3_target, self.actor4_target):
-            action = actor(arr_states[j])
+            action = actor(torch.FloatTensor(cube[j])) #arr_state
+            
             actions.append(action)
             j+=1
 
         actor_actions = torch.cat(actions, dim=1)
-        actor_loss = -self.critic(states, actor_actions).mean()
+        #print("actions:", actor_actions.size())
+        actor_loss = -self.critic(stata, actor_actions).mean()
 
-        for optimizer in (self.actor1_optimizer, self.actor2_optimizer, self.actor3_optimizer, self.cator4_optimizer):
-            optimizer.zero_Grad()
-            actor_loss.backward()
+        for optimizer in (self.actor1_optimizer, self.actor2_optimizer, self.actor3_optimizer, self.actor4_optimizer):
+            optimizer.zero_grad()
+        actor_loss.backward()
+        for optimizer in (self.actor1_optimizer, self.actor2_optimizer, self.actor3_optimizer, self.actor4_optimizer):
             optimizer.step()
 
         #target update
