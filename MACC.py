@@ -44,24 +44,26 @@ from rl_env.OUNoise import OUNoise
 
 
 # Hyperparameters
-num_episodes = 1000
+num_episodes = 10000
 learning_rate = 0.001 #0.0001
 gamma = 0.99
 TAU = 0.1
 batch_size = 32 #64
-buffer_size = 30000
+buffer_size = 100000
 num_epochs = 2
 
 state_dim = 65 # plus goal, contact force
 actor_state_dim = 47
 action_dim = 8 #each agent
 
-model = mujoco.MjModel.from_xml_path('C:/Users/gpu/kisang/Ant_control/rl_env/ant_box.xml') #xml file changed
+model = mujoco.MjModel.from_xml_path('C:/kisang/Ant_control/rl_env/ant_box.xml') #xml file changed
 data = mujoco.MjData(model)
 
 highest_speed = 5000 # maximum steps
 
-work_dir = "/home/kisang-park/Ant_control/result_macc"
+work_dir = "C:/kisang/Ant_control/result_macc"
+#C:/kisang/Ant_control/result_macc
+#/home/kisang-park/Ant_control/result_macc
 #C:/Users/gpu/kisang/Ant_control/rl_env
 
 
@@ -457,7 +459,9 @@ def main():
                 plot(rewards_forplot, dist_forplot, timestep, 0)
 
                 #for num in range(num_epochs):
+            if timestep%10 == 0:
                 agent.train()
+                #agent.train()
         
         #plot(rewards_forplot,dist_forplot, 1, 1)
 
@@ -468,8 +472,8 @@ def main():
             plot(rewards_forplot,dist_forplot, 1, 1)
             rewards_forplot, dist_forplot = [], []
 
-        if episode%100 == 0:
-            rewards_forplot, dist_forplot = [], []
+        rewards_forplot, dist_forplot = [], []
+        print("episode end:", episode)
 
     print ("all episodes executed")
     plot(rewards_forplot,dist_forplot, 1, 1)

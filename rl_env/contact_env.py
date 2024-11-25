@@ -25,7 +25,7 @@ import time
 import mujoco
 
 #hyper parameters
-max_action_num = 200000
+max_action_num = 100000
 minimum_dist = 1
 target_position = [0, 8]
 
@@ -86,7 +86,9 @@ class CONTACT_ENV():
         try:
             self.xml_path = kwargs['xml_path']
         except:
-            self.xml_path = "C:/Users/gpu/kisang/Ant_control/rl_env/ant_box.xml"
+            self.xml_path = "C:/kisang/Ant_control/rl_env/ant_box.xml"
+		#C:/kisang/Ant_control/result_macc
+		#C:/Users/gpu/kisang/Ant_control/rl_env/ant_box.xml
 
         #initialize model, starting condition
         self.model = mujoco.MjModel.from_xml_path(self.xml_path)
@@ -228,33 +230,33 @@ class CONTACT_ENV():
         
         #1. box reward (default values... velocity and distance)
         if old_dist > self.dist: 
-            reward = (9 - self.dist)*3
+            reward = (9 - self.dist)*10
             #reward = np.exp((10 - dist)/2) # 15
         else:
             reward = 0
 
         #2. Ant moving condition (global)
         if self.is_moving():
-            reward += 2
+            reward += 1
         else:
-            reward -= 2 #10 or 16
+            reward -= 3 #10 or 16
         
         #3. Ant healthy
         if self.is_healthy() != 0:
             reward += self.is_healthy()
 
         #4. inter-distance
-        reward += np.min([2-self.inter_dist, 1])*2
+        reward += np.min([3-self.inter_dist, 1])*5
 
         #5. contact advantage -> nope... bottom contact number always exists
         #if self.data.ncon !=0:
         #    reward += 1    
 
         #5. qvel
-        if np.any(self.data.qvel == 0):
+        if np.any(self.data.qvel[7:] == 0): #problem... box included
             reward -= 5
         else:
-            reward += 1
+            reward += 5
 
         #6. done case
         if done_mask and not success:
@@ -351,8 +353,8 @@ class CONTACT_ENV():
         #print("pitch:", pitch)
         #print("roll:", roll)
 
-        max_angle = 1 #np.pi/2
-        min_angle = -1
+        max_angle = 2 #np.pi/2
+        min_angle = -2
 
         #reward: if pitch & roll near 0, plus reward / maximum max or min angle
         pitch_reward = np.min([abs(max_angle - pitch),abs(min_angle - pitch)])
