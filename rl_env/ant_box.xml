@@ -6,7 +6,7 @@
   </custom>
   <default>
     <joint armature="1" damping="1" limited="true"/>
-    <geom conaffinity="0" condim="3" density="5.0" friction="1 0.5 0.5" margin="0.01" rgba="0.8 0.6 0.4 1"/>
+    <geom conaffinity="0" condim="3" density="5.0" friction="1 0.5 0.5" margin="0.01" rgba="0.9 0.6 0.4 1"/>
   </default>
   <asset>
     <texture builtin="gradient" height="100" rgb1="1 1 1" rgb2="0 0 0" type="skybox" width="100"/>
@@ -16,10 +16,9 @@
     <material name="geom" texture="texgeom" texuniform="true"/>
   </asset>
   <worldbody>
-    <body name="box" pos="0 3 1">
-      <freejoint/>
-      <geom name="red_box" conaffinity="1" condim="3" type = "box" size = "0.5 0.5 0.5" rgba="1 0 0 1" solimp=".99 .99 .01" solref=".001 1"/>
-      <inertial pos = "0 0 0" mass = "0.01" diaginertia = "0.1 0.1 0.1"/>
+    <body name="box" pos="0 2 1">
+      <joint type="free" armature="0" damping="0" limited="false" margin="0.01"/>
+      <geom name="red_box" density="1.0" conaffinity="1" condim="3" type = "box" size = "0.5 0.5 0.5" rgba="0.5 0.5 0.5 1" friction=".0001"/>
     </body>
     <light cutoff="100" diffuse="1 1 1" dir="-0 0 -1.3" directional="true" exponent="1" pos="0 0 1.3" specular=".1 .1 .1"/>
     <geom conaffinity="1" condim="3" material="MatPlane" name="floor" pos="0 0 0" rgba="0.8 0.9 0.8 1" size="40 40 40" type="plane"/>

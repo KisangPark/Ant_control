@@ -122,7 +122,7 @@ class CONTACT_ENV():
  -5.47972522e-17 , 1.01089942e+01,  5.50955464e-17, -1.01089942e+01]), np.array([0, 0, 0])]
 
         self.dist = 8 #initial distance
-        self.inter_dist = 4
+        self.inter_dist = 2
 
         # IDs, fixed
         self.torso_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "torso")

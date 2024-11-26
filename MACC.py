@@ -49,7 +49,7 @@ learning_rate = 0.001 #0.0001
 gamma = 0.99
 TAU = 0.1
 batch_size = 64 #64
-buffer_size = 400000
+buffer_size = 500000
 num_epochs = 2
 
 state_dim = 65 # plus goal, contact force
