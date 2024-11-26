@@ -48,8 +48,8 @@ num_episodes = 10000
 learning_rate = 0.001 #0.0001
 gamma = 0.99
 TAU = 0.1
-batch_size = 32 #64
-buffer_size = 100000
+batch_size = 64 #64
+buffer_size = 400000
 num_epochs = 2
 
 state_dim = 65 # plus goal, contact force
@@ -74,21 +74,22 @@ def get_today():
     return s
 
 
-def plot(reward, dist, episode, flag):
-    if episode%5 == 0:
+def plot(reward, dist, timestep, flag):
+    if timestep%10 == 0:
 
         plt.figure(2)
         plt.cla() #delete all
         #durations_t = torch.tensor(laptimes, dtype=torch.float) #torch float tensor for duration
         plt.title('Result plot')
-        plt.xlabel('Episode')
+        plt.xlabel('timestep / 10')
         plt.ylabel('Total Reward')
         plt.plot(reward) # torch tensor to numpy
         plt.plot(dist)
         plt.pause(0.01)
 
     if flag==1:
-        plt.savefig('result_plot.png')
+        save_path = os.path.join(work_dir + "/result_plot_" + str(timestep) + ".png")
+        plt.savefig(save_path)
 
 
 def flat_vectorize(state, batch_size):
@@ -437,7 +438,7 @@ def main():
             action = agent.action(state) #here, state = 0x1 problem occurred
             noise = OUNoise(action_dim).noise()
             #print("action & noise:", len(action), len(noise))
-            action += noise #noisy action returned
+            action += noise*2 #noisy action returned
             
             state, action, next_state, reward, done_mask, success = env.step(action) #env returns: np ndarray
             #state = np.array(state)
@@ -521,6 +522,45 @@ def eval():
 
             viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
 """
+
+def eval():
+
+    #actor_path = os.path.join(work_dir, "actor_448_2024-11-14_20-22-27.pt")
+    #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
+
+    i=0
+
+    #agent = eval_net(state_dim, action_dim, actor_path)
+
+    with mujoco.viewer.launch_passive(model, data) as viewer:
+        mujoco.mj_resetData(model, data)
+        while viewer.is_running():
+            time.sleep(0.001)# for stable rendering
+            qvel_equalized = data.qvel * 10
+            qpos_eqalized = data.qpos *10
+            state = np.concatenate((np.ndarray.flatten(qpos_eqalized), np.ndarray.flatten(qvel_equalized)))
+            action = np.random.random_sample(8)-0.5
+            data.ctrl = action
+            mujoco.mj_step(model,data)
+
+            #angle test
+            #w, x, y, z = data.qpos[3:7]
+            #pitch = np.arcsin(2.0*(w*y - z*x))
+            #roll = np.arctan2(2.0*(w*x+y*z), 1.0-2.0*(x*x + y*y))
+            #yaw = np.arctan2(2.0*(w*z+y*x), 1.0-2.0*(y*y + z*z))
+
+            #print("dist:", np.sqrt(np.sum(np.square(data.qpos[0:2] - [15, 0]))))
+            #dist correctly calculated
+
+            i+=1
+            if (i%100 == 0):
+                print(i, "steps", data.qpos[2])
+                #print("pitch:", pitch)
+                #print ("roll:", roll)
+            #print("step")
+            viewer.sync()
+
+            viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
 
 
 
