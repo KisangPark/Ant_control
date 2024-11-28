@@ -27,7 +27,7 @@ import mujoco
 #hyper parameters
 max_action_num = 200000
 minimum_dist = 1
-target_position = [0, 8]
+target_position = [0, 5]
 
 
 
@@ -121,8 +121,8 @@ class CONTACT_ENV():
   5.47754564e-17, -1.01089942e+01, -5.50734590e-17,  1.01089942e+01,
  -5.47972522e-17 , 1.01089942e+01,  5.50955464e-17, -1.01089942e+01]), np.array([0, 0, 0])]
 
-        self.dist = 8 #initial distance
-        self.inter_dist = 2
+        self.dist = 3.7 #initial distance
+        self.inter_dist = 1.3
 
         # IDs, fixed
         self.torso_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "torso")
@@ -161,12 +161,12 @@ class CONTACT_ENV():
             success = 0
 
         #2. ant out of bounds
-        elif ant_dist > 10:
+        elif ant_dist > 7:
             done_mask = 1
             success = 0
 
         #3. box out of bounds
-        elif box_dist > 10:
+        elif box_dist > 6:
             done_mask = 1
             success = 0
 
@@ -230,7 +230,7 @@ class CONTACT_ENV():
         
         #1. box reward (default values... velocity and distance)
         if old_dist > self.dist: 
-            reward = (9 - self.dist)*10
+            reward = (5 - self.dist)*10
             #reward = np.exp((10 - dist)/2) # 15
         else:
             reward = 0
@@ -246,7 +246,7 @@ class CONTACT_ENV():
             reward += self.is_healthy()
 
         #4. inter-distance
-        reward += np.min([3-self.inter_dist, 1])*5
+        reward += np.min([2.3-self.inter_dist, 1])*3
 
         #5. contact advantage -> nope... bottom contact number always exists
         #if self.data.ncon !=0:
@@ -332,8 +332,8 @@ class CONTACT_ENV():
         self.action_num = 0
         #self.state = np.zeros(29)
 
-        self.dist = 8
-        self.inter_dist = 4
+        self.dist = 3.7
+        self.inter_dist = 1.3
 
         #check for other values
 

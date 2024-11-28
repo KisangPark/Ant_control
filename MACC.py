@@ -388,7 +388,7 @@ class MACCagent:
 
         i = 1
         for actor in (self.actor1, self.actor2, self.actor3, self.actor4):
-            torch.save(actor.state_dict(), work_dir + "/actor" + i + "_" + str(num)+str(today)+".pt")
+            torch.save(actor.state_dict(), work_dir + "/actor" + str(i) + "_" + str(num)+str(today)+".pt")
             i+=1
         highest_speed = num
 
@@ -406,7 +406,7 @@ def main():
     #load environment
     env = rl_env.contact_env.CONTACT_ENV()
 
-    #define PPO agent
+    #define MACC agent
     agent = MACCagent(state_dim, actor_state_dim, action_dim)
 
     #for plot
@@ -565,6 +565,6 @@ def eval():
 
 
 if __name__ == '__main__':
-    main()
+    #main()
 
-    #eval()
+    eval()
