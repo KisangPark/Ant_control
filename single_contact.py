@@ -275,7 +275,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #load environment
-    env = rl_env.contact_env.CONTACT_ENV()
+    #env = rl_env.contact_env.CONTACT_ENV()
+    env = rl_env.contact_env.WALK_ENV()
 
     #define SINGLECONTACTagent agent
     agent = SINGLECONTACTagent(state_dim, action_dim)
@@ -353,87 +354,61 @@ def main():
 
 
 
-"""evaluation net"""
+class eval_net(nn.Module):
+    def __init__(self, state_dim, action_dim, actor_path):
 
-"""class eval_net():
-    def __init__():
         super().__init__()
-
+        self.actor = Actor(state_dim, action_dim)
+        self.actor.load_state_dict(torch.load(actor_path+"/actor_32693_2024-11-30_15-03-11.pt", weights_only = True))
+       
     def forward(self, state):
-        
+        #divide state with cube, forward and return action array
+        state_list = flat_vectorize(state, 1)
+
+        action = self.actor(state_list).detach().numpy()
+        return action
 
 
 def eval():
 
-    actor_path = os.path.join(work_dir, "actor_1001_2024-11-09_12-48-17.pt")
+    actor_path = "C:/kisang/Ant_control/result_single_contact"
     #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0
-
     agent = eval_net(state_dim, action_dim, actor_path)
-
-    with mujoco.viewer.launch_passive(model, data) as viewer:
-        mujoco.mj_resetData(model, data)
-        while viewer.is_running():
-            qvel_equalized = data.qvel * 10
-            qpos_eqalized = data.qpos *10
-            state = np.concatenate((np.ndarray.flatten(qpos_eqalized), np.ndarray.flatten(qvel_equalized)))
-            action = agent(state)
-            data.ctrl = action
-            mujoco.mj_step(model,data)
-
-            #print("dist:", np.sqrt(np.sum(np.square(data.qpos[0:2] - [15, 0]))))
-            #dist correctly calculated
-
-            i+=1
-            if (i%100 == 0):
-                print("100 steps", data.qpos[2])
-            #print("step")
-            viewer.sync()
-
-            viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
-"""
-
-def eval():
-
-    #actor_path = os.path.join(work_dir, "actor_448_2024-11-14_20-22-27.pt")
-    #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
-
-    i=0
 
     #agent = eval_net(state_dim, action_dim, actor_path)
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         mujoco.mj_resetData(model, data)
         while viewer.is_running():
+
             time.sleep(0.001)# for stable rendering
-            qvel_equalized = data.qvel * 10
-            qpos_eqalized = data.qpos *10
-            state = np.concatenate((np.ndarray.flatten(qpos_eqalized), np.ndarray.flatten(qvel_equalized)))
-            action = np.random.random_sample(8)-0.5
+            forcetorque = np.zeros(6)
+            force = np.zeros(3)
+            if data.ncon==0:
+                pass
+            else:
+                for j, c in enumerate(data.contact):
+                    mujoco.mj_contactForce(model, data, j, forcetorque)
+                    force += forcetorque[0:3]
+
+            observation = [data.qpos, data.qvel, data.qacc, force]
+            action = agent(observation)
+            #print(action)
             data.ctrl = action
-            mujoco.mj_step(model,data)
+            mujoco.mj_step(model, data)
 
-            #angle test
-            #w, x, y, z = data.qpos[3:7]
-            #pitch = np.arcsin(2.0*(w*y - z*x))
-            #roll = np.arctan2(2.0*(w*x+y*z), 1.0-2.0*(x*x + y*y))
-            #yaw = np.arctan2(2.0*(w*z+y*x), 1.0-2.0*(y*y + z*z))
-
-            #print("dist:", np.sqrt(np.sum(np.square(data.qpos[0:2] - [15, 0]))))
-            #dist correctly calculated
 
             i+=1
             if (i%100 == 0):
-                print(i, "steps", data.qpos[2])
+                print(i, "steps")
                 #print("pitch:", pitch)
                 #print ("roll:", roll)
             #print("step")
             viewer.sync()
 
             viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
-
-
 
 if __name__ == '__main__':
     main()

@@ -92,7 +92,7 @@ def plot(reward, dist, timestep, flag):
         plt.savefig(save_path)
 
 
-def flat_vectorize(state, batch_size):
+def flat_vectorize(state, batch_size): #for vectorization, whole observation
     flattened = []
     for i in range(batch_size):
         temp = []
@@ -404,7 +404,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #load environment
-    env = rl_env.contact_env.CONTACT_ENV()
+    #env = rl_env.contact_env.CONTACT_ENV()
+    env = rl_env.contact_env.WALK_ENV()
 
     #define MACC agent
     agent = MACCagent(state_dim, actor_state_dim, action_dim)
@@ -419,6 +420,7 @@ def main():
 
         #pre-execution
         states, actions, rewards, next_states, dones = [], [], [], [], []
+        old_reward = 0
         total_reward = 0
         success = 0
         timestep =0
@@ -438,7 +440,7 @@ def main():
             action = agent.action(state) #here, state = 0x1 problem occurred
             noise = OUNoise(action_dim).noise()
             #print("action & noise:", len(action), len(noise))
-            action += noise*2 #noisy action returned
+            action += noise*0.5 #noisy action returned
             
             state, action, next_state, reward, done_mask, success = env.step(action) #env returns: np ndarray
             #state = np.array(state)
@@ -466,13 +468,17 @@ def main():
         
         #plot(rewards_forplot,dist_forplot, 1, 1)
 
+        old_reward = total_reward
+
         #if success
         if success == 1:
             num = env.return_self_action_num()
-            agent.return_net(num)
+            if total_reward>old_reward:
+                agent.return_net(num)
             plot(rewards_forplot,dist_forplot, 1, 1)
             rewards_forplot, dist_forplot = [], []
-
+            
+        old_reward= 0
         rewards_forplot, dist_forplot = [], []
         print("episode end:", episode)
 
@@ -490,71 +496,65 @@ def main():
 
     def forward(self, state):
         
-
-
-def eval():
-
-    actor_path = os.path.join(work_dir, "actor_1001_2024-11-09_12-48-17.pt")
-    #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
-
-    i=0
-
-    agent = eval_net(state_dim, action_dim, actor_path)
-
-    with mujoco.viewer.launch_passive(model, data) as viewer:
-        mujoco.mj_resetData(model, data)
-        while viewer.is_running():
-            qvel_equalized = data.qvel * 10
-            qpos_eqalized = data.qpos *10
-            state = np.concatenate((np.ndarray.flatten(qpos_eqalized), np.ndarray.flatten(qvel_equalized)))
-            action = agent(state)
-            data.ctrl = action
-            mujoco.mj_step(model,data)
-
-            #print("dist:", np.sqrt(np.sum(np.square(data.qpos[0:2] - [15, 0]))))
-            #dist correctly calculated
-
-            i+=1
-            if (i%100 == 0):
-                print("100 steps", data.qpos[2])
-            #print("step")
-            viewer.sync()
-
-            viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
 """
 
+class eval_net(nn.Module):
+    def __init__(self, state_dim, action_dim, actor_path):
+        super().__init__()
+        self.actor1 = Actor(state_dim, action_dim)
+        self.actor1.load_state_dict(torch.load(actor_path+"/actor1_832372024-11-30_10-50-56.pt", weights_only = True))
+        self.actor2 = Actor(state_dim, action_dim)
+        self.actor2.load_state_dict(torch.load(actor_path+"/actor2_832372024-11-30_10-50-56.pt", weights_only = True))
+        self.actor3 = Actor(state_dim, action_dim)
+        self.actor3.load_state_dict(torch.load(actor_path+"/actor3_832372024-11-30_10-50-56.pt", weights_only = True))
+        self.actor4 = Actor(state_dim, action_dim)
+        self.actor4.load_state_dict(torch.load(actor_path+"/actor4_832372024-11-30_10-50-56.pt", weights_only = True))
+
+    def forward(self, state):
+        #divide state with cube, forward and return action array
+        action_list = []
+        state_list = divide_state(state)
+
+        for i, actor in enumerate((self.actor1, self.actor2, self.actor3, self.actor4)):
+            action_temp = actor(torch.FloatTensor(state_list[i])).detach().numpy()
+            action_list.append(action_temp)
+        return np.concatenate(action_list)
+
+
 def eval():
 
-    #actor_path = os.path.join(work_dir, "actor_448_2024-11-14_20-22-27.pt")
+    actor_path = "C:/kisang/Ant_control/result_macc"
     #dev_path = os.path.join(work_dir, "dev_368_2024-10-31_15-48-11.pt")
 
     i=0
+    agent = eval_net(actor_state_dim, action_dim, actor_path)
 
     #agent = eval_net(state_dim, action_dim, actor_path)
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         mujoco.mj_resetData(model, data)
         while viewer.is_running():
+
             time.sleep(0.001)# for stable rendering
-            qvel_equalized = data.qvel * 10
-            qpos_eqalized = data.qpos *10
-            state = np.concatenate((np.ndarray.flatten(qpos_eqalized), np.ndarray.flatten(qvel_equalized)))
-            action = np.random.random_sample(8)-0.5
+            forcetorque = np.zeros(6)
+            force = np.zeros(3)
+            if data.ncon==0:
+                pass
+            else:
+                for j, c in enumerate(data.contact):
+                    mujoco.mj_contactForce(model, data, j, forcetorque)
+                    force += forcetorque[0:3]
+
+            observation = [data.qpos, data.qvel, data.qacc, force]
+            action = agent(observation)
+            print(action)
             data.ctrl = action
-            mujoco.mj_step(model,data)
+            mujoco.mj_step(model, data)
 
-            #angle test
-            #w, x, y, z = data.qpos[3:7]
-            #pitch = np.arcsin(2.0*(w*y - z*x))
-            #roll = np.arctan2(2.0*(w*x+y*z), 1.0-2.0*(x*x + y*y))
-            #yaw = np.arctan2(2.0*(w*z+y*x), 1.0-2.0*(y*y + z*z))
-
-            #print("dist:", np.sqrt(np.sum(np.square(data.qpos[0:2] - [15, 0]))))
-            #dist correctly calculated
 
             i+=1
             if (i%100 == 0):
-                print(i, "steps", data.qpos[2])
+                print(i, "steps")
                 #print("pitch:", pitch)
                 #print ("roll:", roll)
             #print("step")
@@ -565,6 +565,6 @@ def eval():
 
 
 if __name__ == '__main__':
-    #main()
+    main()
 
-    eval()
+    #eval()
