@@ -45,17 +45,18 @@ from rl_env.OUNoise import OUNoise
 
 # Hyperparameters
 num_episodes = 10000
-learning_rate = 0.001 #0.0001
+learning_rate = 0.0001 #0.0001
 gamma = 0.99
 TAU = 0.1
-batch_size = 64 #64
-buffer_size = 500000
+batch_size = 32 #64
+buffer_size = 200000
 num_epochs = 2
 
-state_dim = 65 # plus goal, contact force
-actor_state_dim = 47
+state_dim = 47 # plus goal, contact force
+actor_state_dim = 35
 action_dim = 8 #each agent
 
+#model = mujoco.MjModel.from_xml_path('C:/kisang/Ant_control/rl_env/box_walk.xml') #curriculum method! easier problem
 model = mujoco.MjModel.from_xml_path('C:/kisang/Ant_control/rl_env/ant_box.xml') #xml file changed
 data = mujoco.MjData(model)
 
@@ -70,7 +71,7 @@ work_dir = "C:/kisang/Ant_control/result_macc"
 
 def get_today():
     now = time.localtime()
-    s = "%04d-%02d-%02d_%02d-%02d-%02d" % (now.tm_year, now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
+    s = "%02d_%02d-%02d_%02d" % (now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min)
     return s
 
 
@@ -92,13 +93,21 @@ def plot(reward, dist, timestep, flag):
         plt.savefig(save_path)
 
 
-def flat_vectorize(state, batch_size): #for vectorization, whole observation
+def flat_vectorize(state, batch_size):
     flattened = []
+
+    if batch_size == 1: #for actions.... forwarding
+        temp = []
+        for q in state:
+            for item in q:
+                temp.append(item)
+        return torch.FloatTensor(temp)
+
     for i in range(batch_size):
         temp = []
-        qpos, qvel, qacc, force = state[i]
+        #qpos, qvel, force, distance = state[i]
         
-        for q in (qpos, qvel, qacc, force):
+        for q in state[i]:
             for item in q:
                 temp.append(item)
 
@@ -111,29 +120,23 @@ def flat_vectorize(state, batch_size): #for vectorization, whole observation
 
 def divide_state(state):
     """
-    receiving state: qpos, qvel, qacc, force, box_pos
-    qpos: 7 for torso, 8 for each joints
-    qvel & qacc: 6 for torso, 8 for each joints
-    force: common
-    box_pos: common
+    receiving state: qpos, qvel, force, distances
+    qpos: 7 + 7 + 8 = 22 (7 for box, 7 for torso, 8 for joints)
+    qvel: 6 + 6 + 8 = 20 (6 for box, 6 for torso, 8 for joints)
+    force: common, 2
+    distances: common, 3
 
-    qpos: former 7 values for box position
-    qvel & qacc: former 6 values for box 
-
-    thus, common knowledge of qpos: from index 0~13, qvel&qacc: 0~11
-
-    common state length: 14+12+12+3 = 41
-    actor length: 47
-    total length: 22+20+20+3 = 65
+    thus common state 31, private 4
+    total of 47, individual of 35
     """
     state_list = []
-    qpos, qvel, qacc, force = state
-    common_state = np.concatenate([qpos[0:14], qvel[0:12], qacc[0:12], force]) #common knowledge, length 41
+    qpos, qvel, force, distance_list = state
+    common_state = np.concatenate([qpos[0:14], qvel[0:12], force, distance_list]) #common knowledge, length 41
     
-    start = 6
-    finish = 8
+    start = 12
+    finish = 14
     for i in range(4):
-        temp_state = np.concatenate([common_state, qpos[start+1:finish+1], qvel[start:finish], qacc[start:finish]])
+        temp_state = np.concatenate([common_state, qpos[start+2:finish+2], qvel[start:finish], qacc[start:finish]])
         state_list.append(temp_state)
         start += 2
         finish += 2
@@ -475,7 +478,7 @@ def main():
             num = env.return_self_action_num()
             if total_reward>old_reward:
                 agent.return_net(num)
-            plot(rewards_forplot,dist_forplot, 1, 1)
+                plot(rewards_forplot,dist_forplot, 1, 1)
             rewards_forplot, dist_forplot = [], []
             
         old_reward= 0

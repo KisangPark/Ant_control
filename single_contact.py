@@ -1,20 +1,13 @@
 """
+single contact -> modify parameters, check convergence
 
-MACC
-Multi-agent DDPG - using Centralized Critic
+Modified states: qpos, qvel, xy force, distance
+total length of state: 22+20+2+3 = 47 (state) (box states... 65 = 22+20+20+3)
+MACC -> total length of each agent: 9+8+2+3+13(box) = 35
 
-same sequence: getting result from envrionment
-difference
-    1) four actors & two buffers in MACC agent ->sort states in 4 actors, append in action buffer
-    2) train function: direct learning in critic, 4 times iteration in actor
+box global information: single case no need considerations
+MACC: global info important
 
-*** Consider CTDE case... Too many networks
-
-
-
-
-**for divide state
-all dividing state executed inside agent... thus no dividing in main code
 """
 
 import os
@@ -45,20 +38,22 @@ from rl_env.OUNoise import OUNoise
 
 # Hyperparameters
 num_episodes = 10000
-learning_rate = 0.001 #0.0001
+learning_rate = 0.0001 #0.0001
 gamma = 0.99
 TAU = 0.1
-batch_size = 64 #64
-buffer_size = 500000
+batch_size = 32 #64
+buffer_size = 100000
 num_epochs = 2
 
-state_dim = 65 # plus goal, contact force
+state_dim = 47 # plus goal, contact force
 action_dim = 8 #each agent
 
+target_position = [0,5]
+
+#model = mujoco.MjModel.from_xml_path('C:/kisang/Ant_control/rl_env/box_walk.xml') #curriculum method, easier problem
 model = mujoco.MjModel.from_xml_path('C:/kisang/Ant_control/rl_env/ant_box.xml') #xml file changed
 data = mujoco.MjData(model)
 
-highest_speed = 5000 # maximum steps
 
 work_dir = "C:/kisang/Ant_control/result_single_contact"
 #C:/kisang/Ant_control/result_macc
@@ -69,11 +64,11 @@ work_dir = "C:/kisang/Ant_control/result_single_contact"
 
 def get_today():
     now = time.localtime()
-    s = "%04d-%02d-%02d_%02d-%02d-%02d" % (now.tm_year, now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
+    s = "%02d_%02d-%02d_%02d" % (now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min)
     return s
 
 
-def plot(reward, dist, timestep, flag):
+def plot(reward, dist, timestep, total_reward, flag):
     if timestep%10 == 0:
 
         plt.figure(2)
@@ -87,26 +82,25 @@ def plot(reward, dist, timestep, flag):
         plt.pause(0.01)
 
     if flag==1:
-        save_path = os.path.join(work_dir + "/result_plot_" + str(timestep) + ".png")
+        save_path = os.path.join(work_dir + "/result_plot_" + str(round(total_reward,2)) + "_" + str(timestep) + ".png")
         plt.savefig(save_path)
 
 
 def flat_vectorize(state, batch_size):
     flattened = []
 
-    if batch_size == 1:
+    if batch_size == 1: #for actions.... forwarding
         temp = []
-        qpos, qvel, qacc, force = state
-        for q in (qpos, qvel, qacc, force):
+        for q in state:
             for item in q:
                 temp.append(item)
         return torch.FloatTensor(temp)
 
     for i in range(batch_size):
         temp = []
-        qpos, qvel, qacc, force = state[i]
+        #qpos, qvel, force, distance = state[i]
         
-        for q in (qpos, qvel, qacc, force):
+        for q in state[i]:
             for item in q:
                 temp.append(item)
 
@@ -172,7 +166,7 @@ class ReplayBuffer:
         return len(self.buffer)
 
 
-class SINGLECONTACTagent:
+class SINGLEagent:
     def __init__ (self, state_dim, action_dim): #actor state dimension
 
         #critic part
@@ -181,7 +175,7 @@ class SINGLECONTACTagent:
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=learning_rate)
 
-        #actor part - 4 actors
+        #actor part
         self.actor = Actor(state_dim, action_dim)#.to(device)
         self.actor_target = Actor(state_dim, action_dim)#.to(device)
         self.actor_target.load_state_dict(self.actor.state_dict())
@@ -190,12 +184,8 @@ class SINGLECONTACTagent:
         #buffer
         self.Qbuffer = ReplayBuffer(buffer_size)
 
-        self.highest_speed = 5000
 
-
-    def action (self, in_state): #multiple actors!!
-
-        output = []
+    def action (self, in_state):
 
         state = flat_vectorize(in_state, 1)
 
@@ -205,11 +195,6 @@ class SINGLECONTACTagent:
         return out
         
 
-    """
-    problem in train
-    -> short not visible, to big to get
-    -> deque problem
-    """
     def train (self):
         if self.Qbuffer.size() < batch_size:
             print("short")
@@ -263,8 +248,9 @@ class SINGLECONTACTagent:
         torch.save(self.actor.state_dict(), work_dir + "/actor" + "_" + str(num) + "_" +str(today)+".pt")
         highest_speed = num
 
+        print("******************************************************")
         print("success case returned, highest_speed:", highest_speed)
-
+        print("******************************************************")
 
 
 
@@ -275,11 +261,11 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #load environment
-    #env = rl_env.contact_env.CONTACT_ENV()
-    env = rl_env.contact_env.WALK_ENV()
+    env = rl_env.contact_env.CONTACT_ENV()
+    #env = rl_env.contact_env.WALK_ENV() #curriculum method
 
     #define SINGLECONTACTagent agent
-    agent = SINGLECONTACTagent(state_dim, action_dim)
+    agent = SINGLEagent(state_dim, action_dim)
 
     #for plot
     rewards_forplot = []
@@ -308,9 +294,8 @@ def main():
         while done_mask == 0:
             
             action = agent.action(state) #here, state = 0x1 problem occurred
-            noise = OUNoise(action_dim).noise()
-            #print("action & noise:", len(action), len(noise))
-            action += noise #noisy action returned
+            #noise = OUNoise(action_dim).noise()
+            #action += noise #noisy action returned
             
             state, action, next_state, reward, done_mask, success = env.step(action) #env returns: np ndarray
             #state = np.array(state)
@@ -325,31 +310,29 @@ def main():
 
             if timestep%100 == 0:
                 plot_reward = total_reward/timestep
-                print(timestep, "steped, total reward:", plot_reward)
                 rewards_forplot.append(plot_reward)
                 final_dist = env.return_dist()
                 dist_forplot.append(final_dist)
-                plot(rewards_forplot, dist_forplot, timestep, 0)
+                print(timestep, "steped, total reward:", plot_reward)
+                plot(rewards_forplot, dist_forplot, timestep, 0, 0)
 
                 #for num in range(num_epochs):
             if timestep%10 == 0:
-                agent.train()
-                #agent.train()
-        
-        #plot(rewards_forplot,dist_forplot, 1, 1)
+                for i in range(num_epochs):
+                    agent.train()
 
-        #if success
+
+        #if success, save plot
         if success == 1:
             num = env.return_self_action_num()
             agent.return_net(num)
-            plot(rewards_forplot,dist_forplot, 1, 1)
+            plot(rewards_forplot,dist_forplot, timestep, plot_reward, 1)
             rewards_forplot, dist_forplot = [], []
 
         rewards_forplot, dist_forplot = [], []
         print("episode end:", episode)
 
     print ("all episodes executed")
-    plot(rewards_forplot,dist_forplot, 1, 1)
 
 
 
@@ -359,7 +342,7 @@ class eval_net(nn.Module):
 
         super().__init__()
         self.actor = Actor(state_dim, action_dim)
-        self.actor.load_state_dict(torch.load(actor_path+"/actor_32693_2024-11-30_15-03-11.pt", weights_only = True))
+        self.actor.load_state_dict(torch.load(actor_path+"/actor_32922_12_04-07_24.pt", weights_only = True))
        
     def forward(self, state):
         #divide state with cube, forward and return action array
@@ -368,6 +351,33 @@ class eval_net(nn.Module):
         action = self.actor(state_list).detach().numpy()
         return action
 
+
+def calc_distance(a,b):
+    dist = np.sqrt(np.sum(np.square(a-b)))
+    return dist
+
+def dist_plot(box_dist, ant_dist, inter_dist, force, timestep, flag):
+    #plt.title('distances')
+    plt.subplot(3,1,1)
+    #plt.xlabel('timestep / 10')
+    plt.ylabel('box distance')
+    plt.plot(box_dist)
+    plt.subplot(3,1,2)
+    #plt.xlabel('timestep / 10')
+    plt.ylabel('inter distance')
+    plt.plot(inter_dist)
+    plt.subplot(3,1,3)
+    plt.xlabel('timestep / 10')
+    plt.ylabel('force')
+    plt.plot(force)
+    #plt.figure(2)
+    #plt.cla() #delete all
+
+    plt.pause(0.01)
+
+    if flag==1:
+        save_path = os.path.join(work_dir + "/fina_result_plot_" + str(timestep) + ".png")
+        plt.savefig(save_path)
 
 def eval():
 
@@ -378,29 +388,56 @@ def eval():
     agent = eval_net(state_dim, action_dim, actor_path)
 
     #agent = eval_net(state_dim, action_dim, actor_path)
+    box_arr, ant_arr, inter_arr, force_arr = [], [], [], []
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         mujoco.mj_resetData(model, data)
         while viewer.is_running():
 
             time.sleep(0.001)# for stable rendering
+
+            #force
             forcetorque = np.zeros(6)
-            force = np.zeros(3)
+            force = np.zeros(2)
             if data.ncon==0:
                 pass
             else:
                 for j, c in enumerate(data.contact):
                     mujoco.mj_contactForce(model, data, j, forcetorque)
-                    force += forcetorque[0:3]
+                    force += forcetorque[0:2]
 
-            observation = [data.qpos, data.qvel, data.qacc, force]
+            #distance, box, ant, inter
+            box_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "box")
+            torso_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso")
+            box_pos = data.xpos[box_id][0:2]
+            ant_pos = data.xpos[torso_id][0:2]
+
+            box_dist = calc_distance(box_pos, target_position)
+            ant_dist = calc_distance(ant_pos, target_position)
+            inter_dist = calc_distance(box_pos, ant_pos)
+            distance_list = [box_dist, ant_dist, inter_dist]
+
+            observation = [data.qpos, data.qvel, force, distance_list]
             action = agent(observation)
+
             #print(action)
             data.ctrl = action
+
+            box_arr.append(box_dist)
+            ant_arr.append(ant_dist)
+            inter_arr.append(inter_dist)
+            force_arr.append(force)
+
             mujoco.mj_step(model, data)
 
 
             i+=1
+
+            if (i%10 == 0):
+                dist_plot(box_arr, ant_arr, inter_arr, force_arr, i, 0)
+                if (i%1000 == 0):
+                    dist_plot(box_arr, ant_arr, inter_arr, force_arr, i, 1)
+
             if (i%100 == 0):
                 print(i, "steps")
                 #print("pitch:", pitch)
