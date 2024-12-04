@@ -61,6 +61,7 @@ model = mujoco.MjModel.from_xml_path('C:/kisang/Ant_control/rl_env/ant_box.xml')
 data = mujoco.MjData(model)
 
 highest_speed = 5000 # maximum steps
+target_position = [0,5]
 
 work_dir = "C:/kisang/Ant_control/result_macc"
 #C:/kisang/Ant_control/result_macc
@@ -75,7 +76,7 @@ def get_today():
     return s
 
 
-def plot(reward, dist, timestep, flag):
+def plot(reward, dist, timestep, total_reward, flag):
     if timestep%10 == 0:
 
         plt.figure(2)
@@ -89,7 +90,7 @@ def plot(reward, dist, timestep, flag):
         plt.pause(0.01)
 
     if flag==1:
-        save_path = os.path.join(work_dir + "/result_plot_" + str(timestep) + ".png")
+        save_path = os.path.join(work_dir + "/final_result_plot_" + str(round(total_reward,2)) + str(timestep) + ".png")
         plt.savefig(save_path)
 
 
@@ -136,7 +137,7 @@ def divide_state(state):
     start = 12
     finish = 14
     for i in range(4):
-        temp_state = np.concatenate([common_state, qpos[start+2:finish+2], qvel[start:finish], qacc[start:finish]])
+        temp_state = np.concatenate([common_state, qpos[start+2:finish+2], qvel[start:finish]])
         state_list.append(temp_state)
         start += 2
         finish += 2
@@ -407,8 +408,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #load environment
-    #env = rl_env.contact_env.CONTACT_ENV()
-    env = rl_env.contact_env.WALK_ENV()
+    env = rl_env.contact_env.CONTACT_ENV()
+    #env = rl_env.contact_env.WALK_ENV()
 
     #define MACC agent
     agent = MACCagent(state_dim, actor_state_dim, action_dim)
@@ -423,7 +424,6 @@ def main():
 
         #pre-execution
         states, actions, rewards, next_states, dones = [], [], [], [], []
-        old_reward = 0
         total_reward = 0
         success = 0
         timestep =0
@@ -441,9 +441,9 @@ def main():
         while done_mask == 0:
             
             action = agent.action(state) #here, state = 0x1 problem occurred
-            noise = OUNoise(action_dim).noise()
+            #noise = OUNoise(action_dim).noise()
             #print("action & noise:", len(action), len(noise))
-            action += noise*0.5 #noisy action returned
+            #action += noise*0.5 #no noise
             
             state, action, next_state, reward, done_mask, success = env.step(action) #env returns: np ndarray
             #state = np.array(state)
@@ -462,31 +462,22 @@ def main():
                 rewards_forplot.append(plot_reward)
                 final_dist = env.return_dist()
                 dist_forplot.append(final_dist)
-                plot(rewards_forplot, dist_forplot, timestep, 0)
+                plot(rewards_forplot, dist_forplot, timestep, plot_reward, 0)
 
                 #for num in range(num_epochs):
             if timestep%10 == 0:
                 agent.train()
-                #agent.train()
-        
-        #plot(rewards_forplot,dist_forplot, 1, 1)
-
-        old_reward = total_reward
 
         #if success
         if success == 1:
             num = env.return_self_action_num()
-            if total_reward>old_reward:
-                agent.return_net(num)
-                plot(rewards_forplot,dist_forplot, 1, 1)
-            rewards_forplot, dist_forplot = [], []
-            
-        old_reward= 0
+            agent.return_net(num)
+            plot(rewards_forplot,dist_forplot, timestep, total_reward/timestep, 1)
+
         rewards_forplot, dist_forplot = [], []
-        print("episode end:", episode)
+        print(episode, "episode ended, total reward:", total_reward/timestep)
 
     print ("all episodes executed")
-    plot(rewards_forplot,dist_forplot, 1, 1)
 
 
 
@@ -505,13 +496,13 @@ class eval_net(nn.Module):
     def __init__(self, state_dim, action_dim, actor_path):
         super().__init__()
         self.actor1 = Actor(state_dim, action_dim)
-        self.actor1.load_state_dict(torch.load(actor_path+"/actor1_832372024-11-30_10-50-56.pt", weights_only = True))
+        self.actor1.load_state_dict(torch.load(actor_path+"/actor1_104012_05-03_54.pt", weights_only = True))
         self.actor2 = Actor(state_dim, action_dim)
-        self.actor2.load_state_dict(torch.load(actor_path+"/actor2_832372024-11-30_10-50-56.pt", weights_only = True))
+        self.actor2.load_state_dict(torch.load(actor_path+"/actor2_104012_05-03_54.pt", weights_only = True))
         self.actor3 = Actor(state_dim, action_dim)
-        self.actor3.load_state_dict(torch.load(actor_path+"/actor3_832372024-11-30_10-50-56.pt", weights_only = True))
+        self.actor3.load_state_dict(torch.load(actor_path+"/actor3_104012_05-03_54.pt", weights_only = True))
         self.actor4 = Actor(state_dim, action_dim)
-        self.actor4.load_state_dict(torch.load(actor_path+"/actor4_832372024-11-30_10-50-56.pt", weights_only = True))
+        self.actor4.load_state_dict(torch.load(actor_path+"/actor4_104012_05-03_54.pt", weights_only = True))
 
     def forward(self, state):
         #divide state with cube, forward and return action array
@@ -524,6 +515,35 @@ class eval_net(nn.Module):
         return np.concatenate(action_list)
 
 
+def calc_distance(a,b):
+    dist = np.sqrt(np.sum(np.square(a-b)))
+    return dist
+
+def dist_plot(box_dist, ant_dist, inter_dist, force, timestep, flag):
+    #plt.title('distances')
+    plt.subplot(3,1,1)
+    #plt.xlabel('timestep / 10')
+    plt.ylabel('box distance')
+    plt.plot(box_dist)
+    plt.subplot(3,1,2)
+    #plt.xlabel('timestep / 10')
+    plt.ylabel('inter distance')
+    plt.plot(inter_dist)
+    plt.subplot(3,1,3)
+    plt.xlabel('timestep / 10')
+    plt.ylabel('force')
+    plt.plot(force)
+    #plt.figure(2)
+    #plt.cla() #delete all
+
+    plt.pause(0.01)
+
+    if flag==1:
+        save_path = os.path.join(work_dir + "/final_result_plot_" + str(timestep) + ".png")
+        plt.savefig(save_path)
+
+
+
 def eval():
 
     actor_path = "C:/kisang/Ant_control/result_macc"
@@ -531,6 +551,7 @@ def eval():
 
     i=0
     agent = eval_net(actor_state_dim, action_dim, actor_path)
+    box_arr, ant_arr, inter_arr, force_arr = [], [], [], []
 
     #agent = eval_net(state_dim, action_dim, actor_path)
 
@@ -540,34 +561,53 @@ def eval():
 
             time.sleep(0.001)# for stable rendering
             forcetorque = np.zeros(6)
-            force = np.zeros(3)
+            force = np.zeros(2)
             if data.ncon==0:
                 pass
             else:
                 for j, c in enumerate(data.contact):
                     mujoco.mj_contactForce(model, data, j, forcetorque)
-                    force += forcetorque[0:3]
+                    force += forcetorque[0:2]
 
-            observation = [data.qpos, data.qvel, data.qacc, force]
+            #distance lists
+            box_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "box")
+            torso_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso")
+            box_pos = data.xpos[box_id][0:2]
+            ant_pos = data.xpos[torso_id][0:2]
+
+            box_dist = calc_distance(box_pos, target_position)
+            ant_dist = calc_distance(ant_pos, target_position)
+            inter_dist = calc_distance(box_pos, ant_pos)
+            distance_list = [box_dist, ant_dist, inter_dist]
+
+            observation = [data.qpos*10, data.qvel*10, force, distance_list]
             action = agent(observation)
-            print(action)
-            data.ctrl = action
-            mujoco.mj_step(model, data)
 
+            #print(action)
+            data.ctrl = action
+
+            box_arr.append(box_dist)
+            ant_arr.append(ant_dist)
+            inter_arr.append(inter_dist)
+            force_arr.append(force)
+
+            mujoco.mj_step(model, data)
+            viewer.sync()
+            
+            
 
             i+=1
             if (i%100 == 0):
                 print(i, "steps")
-                #print("pitch:", pitch)
-                #print ("roll:", roll)
-            #print("step")
-            viewer.sync()
+
+            if (i%600 == 0):
+                dist_plot(box_arr, ant_arr, inter_arr, force_arr, i, 1)
 
             viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
 
 
 
 if __name__ == '__main__':
-    main()
+    #main()
 
-    #eval()
+    eval()

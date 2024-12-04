@@ -342,7 +342,7 @@ class eval_net(nn.Module):
 
         super().__init__()
         self.actor = Actor(state_dim, action_dim)
-        self.actor.load_state_dict(torch.load(actor_path+"/actor_32922_12_04-07_24.pt", weights_only = True))
+        self.actor.load_state_dict(torch.load(actor_path+"/actor_2047_12_03-16_27.pt", weights_only = True))
        
     def forward(self, state):
         #divide state with cube, forward and return action array
@@ -417,7 +417,7 @@ def eval():
             inter_dist = calc_distance(box_pos, ant_pos)
             distance_list = [box_dist, ant_dist, inter_dist]
 
-            observation = [data.qpos, data.qvel, force, distance_list]
+            observation = [data.qpos*10, data.qvel*10, force, distance_list]
             action = agent(observation)
 
             #print(action)
@@ -448,6 +448,6 @@ def eval():
             viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
 
 if __name__ == '__main__':
-    main()
+    #main()
 
-    #eval()
+    eval()
