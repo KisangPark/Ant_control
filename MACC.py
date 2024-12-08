@@ -543,6 +543,31 @@ def dist_plot(box_dist, ant_dist, inter_dist, force, timestep, flag):
         plt.savefig(save_path)
 
 
+def stability_plot(angle, velocity, timestep, flag):
+
+    #tilt angle
+    plt.subplot(2,1,1)
+    plt.ylabel('max tilted angle')
+    plt.plot(angle, 'r')
+
+    plt.subplot(2,1,2)
+    plt.ylabel('y axis velocity')
+    plt.plot(velocity, 'r')
+
+    #plt.subplot(3,1,3)
+    #plt.xlabel('timestep / 10')
+    #plt.ylabel('force')
+    #plt.plot(force)
+    #plt.figure(2)
+    #plt.cla() #delete all
+
+    plt.pause(0.01)
+
+    if flag==1:
+        save_path = os.path.join(work_dir + "/fina_result_plot_" + str(timestep) + ".png")
+        plt.savefig(save_path)
+
+
 
 def eval():
 
@@ -552,6 +577,7 @@ def eval():
     i=0
     agent = eval_net(actor_state_dim, action_dim, actor_path)
     box_arr, ant_arr, inter_arr, force_arr = [], [], [], []
+    angle_arr, velocity_arr = [], []
 
     #agent = eval_net(state_dim, action_dim, actor_path)
 
@@ -591,6 +617,16 @@ def eval():
             inter_arr.append(inter_dist)
             force_arr.append(force)
 
+
+            #stability plot
+            w, x, y, z = data.qpos[10:14]
+            pitch = np.arcsin(2.0*(w*y - z*x))
+            roll = np.arctan2(2.0*(w*x+y*z), 1.0-2.0*(x*x + y*y))
+            #angle_arr.append(np.max([pitch, roll]))
+            angle_arr.append(pitch)
+            velocity_arr.append(roll) #data.qvel[1]
+            
+
             mujoco.mj_step(model, data)
             viewer.sync()
             
@@ -600,8 +636,12 @@ def eval():
             if (i%100 == 0):
                 print(i, "steps")
 
-            if (i%600 == 0):
-                dist_plot(box_arr, ant_arr, inter_arr, force_arr, i, 1)
+
+            #if (i%10 == 0):
+                #stability_plot(np.gradient(angle_arr), np.gradient(velocity_arr), i, 0)
+                #if (i%600 == 0):
+                    #stability_plot(np.gradient(angle_arr), np.gradient(velocity_arr), i, 1)
+                    #print(np.std(angle_arr), "&", np.std(velocity_arr))
 
             viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = 1
 
